@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/PolySignals.iml" filepath="$PROJECT_DIR$/.idea/PolySignals.iml" />
+      <module fileurl="file://$PROJECT_DIR$/PolySignals/PolySignals.iml" filepath="$PROJECT_DIR$/PolySignals/PolySignals.iml" />
     </modules>
   </component>
 </project>
