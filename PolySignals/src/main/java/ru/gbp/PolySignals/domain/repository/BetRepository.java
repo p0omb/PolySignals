@@ -16,17 +16,17 @@ public interface BetRepository extends JpaRepository<Bet, Long> {
     boolean existsByUniqueKey(String uniqueKey);
 
     @Query(value = """
-        SELECT 
-            b.market_id as marketId,
-            b.outcome as outcome,
-            COUNT(DISTINCT b.whale_id) as whalesCount,
-            SUM(b.amount) as totalAmount
-        FROM bet b 
-        WHERE b.transaction_time >= :from 
-            AND b.transaction_time <= :to
-        GROUP BY b.market_id, b.outcome
-        HAVING COUNT(DISTINCT b.whale_id) >= :minWhales
-        """,
+            SELECT 
+                b.market_id as marketId,
+                b.outcome as outcome,
+                COUNT(DISTINCT b.whale_id) as whalesCount,
+                SUM(b.amount) as totalAmount
+            FROM bet b 
+            WHERE b.transaction_time >= :from 
+                AND b.transaction_time <= :to
+            GROUP BY b.market_id, b.outcome
+            HAVING COUNT(DISTINCT b.whale_id) >= :minWhales
+            """,
             nativeQuery = true)
     List<SignalCandidateProjection> findSignalCandidates(
             @Param("from") Instant from,
@@ -35,12 +35,12 @@ public interface BetRepository extends JpaRepository<Bet, Long> {
     );
 
     @Query("""
-        SELECT COUNT(s) > 0 
-        FROM Signal s 
-        WHERE s.marketId = :marketId 
-            AND s.outcome = :outcome 
-            AND s.createdAt >= :from
-        """)
+            SELECT COUNT(s) > 0 
+            FROM Signal s 
+            WHERE s.marketId = :marketId 
+                AND s.outcome = :outcome 
+                AND s.createdAt >= :from
+            """)
     boolean existsRecentSignal(
             @Param("marketId") String marketId,
             @Param("outcome") String outcome,

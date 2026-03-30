@@ -20,11 +20,11 @@ public interface SignalRepository extends JpaRepository<Signal, Long> {
     );
 
     @Query("""
-        SELECT s FROM Signal s 
-        WHERE s.marketId = :marketId 
-            AND s.outcome = :outcome 
-        ORDER BY s.createdAt DESC
-        """)
+            SELECT s FROM Signal s 
+            WHERE s.marketId = :marketId 
+                AND s.outcome = :outcome 
+            ORDER BY s.createdAt DESC
+            """)
     List<Signal> findByMarketIdAndOutcomeOrderByCreatedAtDesc(
             @Param("marketId") String marketId,
             @Param("outcome") String outcome
