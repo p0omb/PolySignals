@@ -1,7 +1,7 @@
 package ru.gbp.PolySignals.domain.entity;
 
 import jakarta.persistence.*;
-import org.springframework.data.annotation.Id;
+import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -11,6 +11,7 @@ import java.time.Instant;
         @Index(name = "idx_bet_market_outcome_time", columnList = "market_id, outcome, transaction_time"),
         @Index(name = "idx_bet_whale_id", columnList = "whale_id")
 })
+@Data
 public class Bet {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

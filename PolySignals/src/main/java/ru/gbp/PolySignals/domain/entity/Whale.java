@@ -1,8 +1,7 @@
 package ru.gbp.PolySignals.domain.entity;
 
 import jakarta.persistence.*;
-
-import org.springframework.data.annotation.Id;
+import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -11,6 +10,7 @@ import java.time.Instant;
 @Table(name = "whale", indexes = {
         @Index(name = "idx_whale_user_id", columnList = "user_id", unique = true)
 })
+@Data
 public class Whale {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
