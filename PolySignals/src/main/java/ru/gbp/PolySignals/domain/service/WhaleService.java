@@ -4,10 +4,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.gbp.PolySignals.client.polymarket.DataApiClient;
+import ru.gbp.PolySignals.client.polymarket.dto.LeaderboardUserDto;
 import ru.gbp.PolySignals.domain.entity.Whale;
 import ru.gbp.PolySignals.domain.repository.WhaleRepository;
 
 import java.time.Instant;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -17,7 +19,7 @@ public class WhaleService {
     private final WhaleRepository whaleRepository;
 
     @Transactional
-    public void refreshWhales(int limit, SortBy sortBy) {
+    public void refreshWhales(int limit) {
         List<LeaderboardUserDto> leaderboard = dataApiClient.getTopWhales(limit);
         Instant now = Instant.now();
 

@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.gbp.PolySignals.SignalCandidateProjection;
 import ru.gbp.PolySignals.client.polymarket.GammaApiClient;
+import ru.gbp.PolySignals.client.polymarket.dto.MarketDetailsDto;
 import ru.gbp.PolySignals.domain.entity.Signal;
 import ru.gbp.PolySignals.domain.repository.BetRepository;
 import ru.gbp.PolySignals.domain.repository.SignalRepository;
@@ -45,7 +46,6 @@ public class SignalDetectionService {
             signalRepository.save(signal);
 
             MarketDetailsDto market = gammaApiClient.getMarket(c.getMarketId());
-            notificationService.sendSignalToAllSubscribers(signal, market);
         }
     }
 }

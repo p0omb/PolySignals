@@ -3,6 +3,7 @@ package ru.gbp.PolySignals.domain.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.gbp.PolySignals.client.polymarket.dto.UserTradeDto;
 import ru.gbp.PolySignals.domain.entity.Bet;
 import ru.gbp.PolySignals.domain.entity.Whale;
 import ru.gbp.PolySignals.domain.repository.BetRepository;
