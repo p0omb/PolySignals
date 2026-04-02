@@ -18,6 +18,10 @@ public class GammaApiClient {
 
     @Cacheable(cacheNames = "markets", key = "#marketId")
     public MarketDetailsDto getMarket(String marketId) {
+        if (marketId == null || marketId.isBlank()) {
+            throw new IllegalArgumentException("marketId must not be blank");
+        }
+
         final String endpoint = MARKET_ENDPOINT.formatted(marketId);
         return gammaApiWebClient.get()
                 .uri(uriBuilder -> uriBuilder
