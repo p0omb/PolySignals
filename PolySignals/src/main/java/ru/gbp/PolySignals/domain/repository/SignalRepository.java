@@ -13,6 +13,13 @@ import java.util.List;
 @Repository
 public interface SignalRepository extends JpaRepository<Signal, Long> {
 
+    @Query("""
+            SELECT COUNT(s) > 0
+            FROM Signal s
+            WHERE s.marketId = :marketId
+              AND s.outcome = :outcome
+              AND s.createdAt >= :from
+            """)
     boolean existsRecentSignal(
             @Param("marketId") String marketId,
             @Param("outcome") String outcome,
