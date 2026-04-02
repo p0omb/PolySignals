@@ -19,6 +19,12 @@ public class Signal {
     @Column(name = "market_id", nullable = false, length = 128)
     private String marketId;
 
+    @Column(name = "market_question", length = 512)
+    private String marketQuestion;
+
+    @Column(name = "market_url", length = 512)
+    private String marketUrl;
+
     @Column(name = "outcome", nullable = false, length = 16)
     private String outcome;
 
@@ -31,6 +37,21 @@ public class Signal {
     @Column(name = "period_hours", nullable = false)
     private Integer periodHours;
 
+    @Column(name = "first_bet_at", nullable = false)
+    private Instant firstBetAt;
+
+    @Column(name = "last_bet_at", nullable = false)
+    private Instant lastBetAt;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
+
+    @Column(name = "telegram_sent", nullable = false)
+    private Boolean telegramSent = false;
+
+    @Column(name = "telegram_sent_at")
+    private Instant telegramSentAt;
+
+    @Column(name = "reason", length = 512)
+    private String reason;
 }
