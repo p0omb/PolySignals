@@ -1,4 +1,4 @@
-package ru.gbp.PolySignals;
+package ru.gbp.PolySignals.domain.repository;
 
 import java.math.BigDecimal;
 
