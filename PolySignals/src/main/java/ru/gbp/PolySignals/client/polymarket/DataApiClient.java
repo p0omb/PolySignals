@@ -13,6 +13,7 @@ import ru.gbp.PolySignals.client.polymarket.dto.UserTradeDto;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +30,10 @@ public class DataApiClient {
             backoff = @Backoff(delay = 500, multiplier = 2)
     )
     public List<LeaderboardUserDto> getTopWhales(int limit) {
+        if (limit <= 0) {
+            throw new IllegalArgumentException("limit must be > 0");
+        }
+
         return dataApiWebClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path(TOP_WHALES_ENDPOINT)
@@ -56,6 +61,14 @@ public class DataApiClient {
             backoff = @Backoff(delay = 500, multiplier = 2)
     )
     public List<UserTradeDto> getUserTrades(String userId, Instant afterTimestamp, int limit) {
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("userId must not be blank");
+        }
+        Objects.requireNonNull(afterTimestamp, "afterTimestamp must not be null");
+        if (limit <= 0) {
+            throw new IllegalArgumentException("limit must be > 0");
+        }
+
         final String endpoint = USER_TRADES_ENDPOINT.formatted(userId);
         return dataApiWebClient.get()
                 .uri(uriBuilder -> uriBuilder
