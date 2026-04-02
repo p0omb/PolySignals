@@ -2,10 +2,9 @@ package ru.gbp.PolySignals.domain.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import ru.gbp.PolySignals.SignalCandidateProjection;
-import ru.gbp.PolySignals.client.polymarket.GammaApiClient;
-import ru.gbp.PolySignals.client.polymarket.dto.MarketDetailsDto;
+import ru.gbp.PolySignals.domain.repository.SignalCandidateProjection;
+import ru.gbp.PolySignals.client.telegram.SignalNotificationPayload;
+import ru.gbp.PolySignals.client.telegram.NotificationService;
 import ru.gbp.PolySignals.domain.entity.Signal;
 import ru.gbp.PolySignals.domain.repository.BetRepository;
 import ru.gbp.PolySignals.domain.repository.SignalRepository;
@@ -21,17 +20,19 @@ public class SignalDetectionService {
     private final BetRepository betRepository;
     private final SignalRepository signalRepository;
     private final NotificationService notificationService;
-    private final GammaApiClient gammaApiClient;
 
-    @Transactional
     public void detectAndSendSignals(Duration period, Duration cooldown) {
-        Instant from = Instant.now().minus(period);
+        Instant now = Instant.now();
+        Instant from = now.minus(period);
+        Instant to = now;
+        int minWhales = 2;
+
         List<SignalCandidateProjection> candidates =
-                betRepository.findSignalCandidates(from); // JPQL или native
+                betRepository.findSignalCandidates(from, to, minWhales);
 
         for (SignalCandidateProjection c : candidates) {
             boolean existsRecent = signalRepository.existsRecentSignal(
-                    c.getMarketId(), c.getOutcome(), Instant.now().minus(cooldown));
+                    c.getMarketId(), c.getOutcome(), now.minus(cooldown));
             if (existsRecent) {
                 continue;
             }
@@ -42,10 +43,31 @@ public class SignalDetectionService {
             signal.setWhalesCount(c.getWhalesCount());
             signal.setTotalAmount(c.getTotalAmount());
             signal.setPeriodHours((int) period.toHours());
-            signal.setCreatedAt(Instant.now());
+            signal.setFirstBetAt(from);
+            signal.setLastBetAt(to);
+            signal.setReason("Matched " + c.getWhalesCount() + " whales on same market/outcome");
+            signal.setCreatedAt(now);
+
             signalRepository.save(signal);
 
-            MarketDetailsDto market = gammaApiClient.getMarket(c.getMarketId());
+            SignalNotificationPayload payload = buildNotificationPayload(signal);
+            notificationService.sendSignalNotification(payload);
         }
+    }
+
+    private SignalNotificationPayload buildNotificationPayload(Signal signal) {
+        return new SignalNotificationPayload(
+                signal.getId(),
+                signal.getMarketId(),
+                signal.getMarketQuestion(),
+                signal.getMarketUrl(),
+                signal.getOutcome(),
+                signal.getWhalesCount(),
+                signal.getTotalAmount(),
+                signal.getFirstBetAt(),
+                signal.getLastBetAt(),
+                List.of(),
+                signal.getReason()
+        );
     }
 }
