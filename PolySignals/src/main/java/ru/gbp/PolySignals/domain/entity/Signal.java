@@ -16,6 +16,9 @@ public class Signal {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "signal_key", nullable = false, unique = true, length = 255)
+    private String signalKey;
+
     @Column(name = "market_id", nullable = false, length = 128)
     private String marketId;
 
