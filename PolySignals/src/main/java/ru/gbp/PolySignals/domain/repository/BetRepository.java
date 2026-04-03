@@ -34,17 +34,39 @@ public interface BetRepository extends JpaRepository<Bet, Long> {
     );
 
     @Query("""
-            SELECT COUNT(s) > 0 
-            FROM Signal s 
-            WHERE s.marketId = :marketId 
-                AND s.outcome = :outcome 
-                AND s.createdAt >= :from
+            SELECT
+                b.marketId as marketId,
+                b.outcome as outcome,
+                COUNT(DISTINCT b.whale.id) as whalesCount,
+                SUM(b.amount) as totalAmount,
+                MIN(b.transactionTime) as firstBetAt,
+                MAX(b.transactionTime) as lastBetAt
+            FROM Bet b
+            WHERE b.marketId = :marketId
+              AND b.outcome = :outcome
+              AND b.transactionTime >= :from
+              AND b.transactionTime <= :to
+            GROUP BY b.marketId, b.outcome
             """)
-    boolean existsRecentSignal(
+    MarketOutcomeSignalProjection findMarketOutcomeSignalStats(
             @Param("marketId") String marketId,
             @Param("outcome") String outcome,
-            @Param("from") Instant from
+            @Param("from") Instant from,
+            @Param("to") Instant to
     );
+
+//    @Query("""
+//            SELECT COUNT(s) > 0
+//            FROM Signal s
+//            WHERE s.marketId = :marketId
+//                AND s.outcome = :outcome
+//                AND s.createdAt >= :from
+//            """)
+//    boolean existsRecentSignal(
+//            @Param("marketId") String marketId,
+//            @Param("outcome") String outcome,
+//            @Param("from") Instant from
+//    );
 
     // Дополнительно: для отладки
     @Query("SELECT b FROM Bet b WHERE b.marketId = :marketId AND b.outcome = :outcome ORDER BY b.transactionTime DESC")
