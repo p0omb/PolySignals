@@ -1,6 +1,7 @@
 package ru.gbp.PolySignals.domain.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -67,6 +68,10 @@ public interface BetRepository extends JpaRepository<Bet, Long> {
 //            @Param("outcome") String outcome,
 //            @Param("from") Instant from
 //    );
+
+    @Modifying
+    @Query("DELETE FROM Bet b WHERE b.transactionTime < :cutoff")
+    int deleteOldBets(@Param("cutoff") Instant cutoff);
 
     // Дополнительно: для отладки
     @Query("SELECT b FROM Bet b WHERE b.marketId = :marketId AND b.outcome = :outcome ORDER BY b.transactionTime DESC")
