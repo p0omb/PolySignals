@@ -1,0 +1,94 @@
+spring:
+  main:
+    allow-bean-definition-overriding: true
+    lazy-initialization: true  # Ускоряет старт тестов
+
+  profiles:
+    active: test
+
+  # DATABASE CONFIGURATION (MUST FOR FLYWAY)
+  datasource:
+    url: jdbc:postgresql://localhost:5432/test_polysignals
+    username: test
+    password: test
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 2
+      minimum-idle: 1
+      connection-timeout: 10000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  test:
+    database:
+      replace: none  # Важно: используем реальную тестовую БД
+
+  cache:
+    type: simple
+
+  jackson:
+    time-zone: UTC
+
+  task:
+    scheduling:
+      enabled: false
+
+# APPLICATION CONFIGURATION (MUST MATCH PRODUCTION DEFAULTS)
+app:
+  whales:
+    top-limit: 100
+  signal:
+    cooldown: 6h      # ТЕСТОВОЕ значение (в prod 12h)
+    window: 4d        # Переживает период для тестирования (в prod 6h)
+    backup-period: 7d
+    min-bet-size: 10
+  polymarket:
+    retry:
+      max-attempts: 3
+      initial-delay: 1s
+      multiplier: 2.0
+  cleanup:
+    signals-retention: P30D
+    bets-retention: P90D
+
+# THIRD-PARTY SERVICES (MOCKED VIA WIREMOCK)
+telegram:
+  bot:
+    token: "1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
+    chat-id: "-1001234567890"
+    api-base-url: http://localhost:9999
+
+polymarket:
+  data-api:
+    base-url: http://localhost:9999
+  gamma-api:
+    base-url: http://localhost:9998
+
+# LOGGING FOR DEBUGGING
+logging:
+  level:
+    root: WARN
+    ru.gbp.PolySignals: DEBUG
+    org.springframework.test: DEBUG
+    org.springframework.web: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
