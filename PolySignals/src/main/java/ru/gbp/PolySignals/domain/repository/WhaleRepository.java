@@ -1,5 +1,7 @@
 package ru.gbp.PolySignals.domain.repository;
 
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -26,4 +28,10 @@ public interface WhaleRepository extends JpaRepository<Whale, Long> {
     @Modifying
     @Query("UPDATE Whale w SET w.lastSeenAt = :now WHERE w.userId = :userId")
     int updateLastSeenAt(@Param("userId") String userId, @Param("now") Instant now);
+
+    List<Whale> findByOrderByVolumeDesc(Pageable pageable);
+
+    default List<Whale> findTopWhales(int limit) {
+        return findByOrderByVolumeDesc(PageRequest.of(0, limit));
+    }
 }

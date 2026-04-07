@@ -7,8 +7,10 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import ru.gbp.PolySignals.domain.entity.Signal;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 
 @Repository
 public interface SignalRepository extends JpaRepository<Signal, Long> {
@@ -47,4 +49,20 @@ public interface SignalRepository extends JpaRepository<Signal, Long> {
     @Modifying
     @Query("DELETE FROM Signal s WHERE s.createdAt < :cutoff")
     int deleteOldSignals(@Param("cutoff") Instant cutoff);
+
+    @Query("""
+            SELECT s
+            FROM Signal s
+            WHERE s.createdAt >= :from
+            ORDER BY s.createdAt DESC
+            """)
+    List<Signal> findAllRecent(@Param("from") Instant from);
+
+    default List<Signal> findRecentSignals(Duration window) {
+        Objects.requireNonNull(window, "window must not be null");
+        if (window.isZero() || window.isNegative()) {
+            throw new IllegalArgumentException("window must be > 0");
+        }
+        return findAllRecent(Instant.now().minus(window));
+    }
 }
