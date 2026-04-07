@@ -19,19 +19,26 @@ public class WhaleService {
     private final WhaleRepository whaleRepository;
 
     @Transactional
-    public void refreshWhales(int limit) {
-        List<LeaderboardUserDto> leaderboard = dataApiClient.getTopWhales(limit);
+    public int updateWhales(List<LeaderboardUserDto> leaderboard) {
         Instant now = Instant.now();
+        int updated = 0;
 
         for (LeaderboardUserDto dto : leaderboard) {
-            Whale whale = whaleRepository.findByUserId(dto.getUserId())
-                    .orElseGet(Whale::new);
+            Whale whale = whaleRepository.findByUserId(dto.getUserId()).orElseGet(Whale::new);
             whale.setUserId(dto.getUserId());
             whale.setUserName(dto.getUserName());
             whale.setVolume(dto.getVolume());
             whale.setProfit(dto.getProfit());
             whale.setLastSeenAt(now);
             whaleRepository.save(whale);
+            updated++;
         }
+        return updated;
+    }
+
+    @Transactional
+    public void refreshWhales(int limit) {
+        List<LeaderboardUserDto> leaderboard = dataApiClient.getTopWhales(limit);
+        updateWhales(leaderboard);
     }
 }
