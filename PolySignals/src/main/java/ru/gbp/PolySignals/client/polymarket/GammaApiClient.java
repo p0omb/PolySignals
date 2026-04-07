@@ -12,7 +12,7 @@ import ru.gbp.PolySignals.client.polymarket.dto.MarketDetailsDto;
 @RequiredArgsConstructor
 public class GammaApiClient {
 
-    private static final String MARKET_ENDPOINT = "/markets/%s";
+    private static final String MARKET_ENDPOINT = "/markets/{marketId}";
 
     private final WebClient gammaApiWebClient;
 
@@ -24,9 +24,7 @@ public class GammaApiClient {
 
         final String endpoint = MARKET_ENDPOINT.formatted(marketId);
         return gammaApiWebClient.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/markets/{marketId}")
-                        .build(marketId))
+                .uri(MARKET_ENDPOINT, marketId)
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, response -> response.bodyToMono(String.class)
                         .defaultIfEmpty("")
