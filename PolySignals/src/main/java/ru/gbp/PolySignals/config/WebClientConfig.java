@@ -59,4 +59,9 @@ public class WebClientConfig {
             return Mono.just(clientResponse);
         });
     }
+
+    @Bean
+    public WebClient.Builder webClientBuilder() {
+        return WebClient.builder();
+    }
 }
