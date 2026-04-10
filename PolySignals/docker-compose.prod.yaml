@@ -1,0 +1,80 @@
+version: "3.9"
+
+services:
+  # Spring Boot приложение (готовый образ из Docker Hub)
+  app:
+    image: myuser/polysignals:latest # TODO: замените на ваш реальный registry/image:tag
+    container_name: polysignals-app
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Настройки БД для Spring Boot
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${DB_NAME}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+
+      # Профиль приложения
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+
+      # Telegram
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # Проверка /actuator/health внутри контейнера приложения
+      test: ["CMD-SHELL", "curl --fail http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks:
+      - backend
+    logging:
+      # Ограничение размера логов контейнера
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # PostgreSQL (внутри backend-сети, порт наружу НЕ публикуем)
+  postgres:
+    image: postgres:16-alpine
+    container_name: polysignals-postgres
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # Проверка готовности PostgreSQL
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - backend
+    logging:
+      # Ограничение размера логов контейнера
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Именованный volume для персистентности БД
+volumes:
+  postgres_data:
+
+# Общая внутренняя сеть между сервисами
+networks:
+  backend:
+    driver: bridge
