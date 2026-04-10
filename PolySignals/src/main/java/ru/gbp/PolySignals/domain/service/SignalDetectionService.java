@@ -2,12 +2,12 @@ package ru.gbp.PolySignals.domain.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import ru.gbp.PolySignals.client.telegram.NotificationService;
-import ru.gbp.PolySignals.client.telegram.SignalNotificationPayload;
 import ru.gbp.PolySignals.domain.entity.Bet;
 import ru.gbp.PolySignals.domain.entity.Signal;
+import ru.gbp.PolySignals.domain.event.SignalCreatedEvent;
 import ru.gbp.PolySignals.domain.repository.BetRepository;
 import ru.gbp.PolySignals.domain.repository.MarketOutcomeSignalProjection;
 import ru.gbp.PolySignals.domain.repository.SignalCandidateProjection;
@@ -29,7 +29,7 @@ public class SignalDetectionService {
 
     private final BetRepository betRepository;
     private final SignalRepository signalRepository;
-    private final NotificationService notificationService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public void checkSignalForNewBet(Bet newBet, Duration signalWindow, Duration cooldown) {
         Objects.requireNonNull(newBet, "newBet must not be null");
@@ -106,28 +106,7 @@ public class SignalDetectionService {
             throw ex;
         }
 
-        SignalNotificationPayload payload = buildNotificationPayload(savedSignal);
-        notificationService.sendSignalNotification(payload);
-
-        savedSignal.setTelegramSent(true);
-        savedSignal.setTelegramSentAt(Instant.now());
-        signalRepository.saveAndFlush(savedSignal);
-    }
-
-    private SignalNotificationPayload buildNotificationPayload(Signal signal) {
-        return new SignalNotificationPayload(
-                signal.getId(),
-                signal.getMarketId(),
-                signal.getMarketQuestion(),
-                signal.getMarketUrl(),
-                signal.getOutcome(),
-                signal.getWhalesCount(),
-                signal.getTotalAmount(),
-                signal.getFirstBetAt(),
-                signal.getLastBetAt(),
-                List.of(),
-                signal.getReason()
-        );
+        eventPublisher.publishEvent(new SignalCreatedEvent(savedSignal.getId()));
     }
 
     private String buildReason(MarketOutcomeSignalProjection stats) {
@@ -195,4 +174,3 @@ public class SignalDetectionService {
         return false;
     }
 }
-

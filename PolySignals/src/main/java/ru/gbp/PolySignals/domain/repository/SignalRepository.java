@@ -1,5 +1,6 @@
 package ru.gbp.PolySignals.domain.repository;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -65,4 +66,22 @@ public interface SignalRepository extends JpaRepository<Signal, Long> {
         }
         return findAllRecent(Instant.now().minus(window));
     }
+
+    @Query("""
+           select s.id
+           from Signal s
+           where s.telegramSent = false
+           order by s.createdAt asc
+           """)
+    List<Long> findUnsentSignalIds(Pageable pageable);
+
+    @Modifying
+    @Query("""
+           update Signal s
+              set s.telegramSent = true,
+                  s.telegramSentAt = :sentAt
+            where s.id = :signalId
+              and s.telegramSent = false
+           """)
+    int markTelegramSent(@Param("signalId") Long signalId, @Param("sentAt") Instant sentAt);
 }
