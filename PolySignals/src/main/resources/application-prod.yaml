@@ -17,32 +17,26 @@ spring:
 
   security:
     user:
-      name: admin  # ❌ NO! Должно быть через env
+      name: ${ADMIN_NAME:admin}
       password: ${ADMIN_PASSWORD}
 
 management:
+  server:
+    port: 9091
   endpoints:
     web:
+      base-path: /actuator
       exposure:
-        include: health,info,metrics,prometheus
-
-        server:
-          port: 9091  # Отдельный порт для metrics
-
-        endpoints:
-          web:
-            exposure:
-              include: health,metrics,prometheus  # ❌ 'info' убрать в prod
-            basePath: /actuator
-
-        endpoint:
-          health:
-            show-details: never  # ❌ Приватная информация!
-
-        metrics:
-          export:
-            prometheus:
-              enabled: true
+        include: health,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  security:
+    enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
 
 logging:
   level:
