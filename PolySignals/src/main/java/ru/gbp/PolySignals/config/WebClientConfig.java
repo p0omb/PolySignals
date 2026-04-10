@@ -1,5 +1,6 @@
 package ru.gbp.PolySignals.config;
 
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
@@ -10,17 +11,19 @@ import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import reactor.netty.http.client.HttpClient;
+import ru.gbp.PolySignals.config.properties.PolymarketApiProperties;
 
 import java.time.Duration;
 
 @Configuration
 @EnableRetry
+@EnableConfigurationProperties(PolymarketApiProperties.class)
 public class WebClientConfig {
 
     @Bean
-    public WebClient dataApiWebClient(WebClient.Builder builder) {
+    public WebClient dataApiWebClient(WebClient.Builder builder, PolymarketApiProperties polymarketApiProperties) {
         return builder
-                .baseUrl("https://data-api.polymarket.com")
+                .baseUrl(polymarketApiProperties.getDataApi().getBaseUrl())
                 .clientConnector(new ReactorClientHttpConnector(
                         HttpClient.create()
                                 .responseTimeout(Duration.ofSeconds(5))
@@ -33,9 +36,9 @@ public class WebClientConfig {
     }
 
     @Bean
-    public WebClient gammaApiWebClient(WebClient.Builder builder) {
+    public WebClient gammaApiWebClient(WebClient.Builder builder, PolymarketApiProperties polymarketApiProperties) {
         return builder
-                .baseUrl("https://gamma-api.polymarket.com")
+                .baseUrl(polymarketApiProperties.getGammaApi().getBaseUrl())
                 .clientConnector(new ReactorClientHttpConnector(
                         HttpClient.create()
                                 .responseTimeout(Duration.ofSeconds(5))
