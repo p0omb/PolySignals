@@ -14,6 +14,8 @@ spring:
       maximum-pool-size: ${DB_HIKARI_MAX_POOL_SIZE:10}
       minimum-idle: ${DB_HIKARI_MIN_IDLE:2}
       connection-timeout: ${DB_HIKARI_CONNECTION_TIMEOUT_MS:30000}
+      idle-timeout: ${DB_HIKARI_IDLE_TIMEOUT_MS:600000}   # 10m: освобождает лишние idle-коннекты без лишнего churn
+      max-lifetime: ${DB_HIKARI_MAX_LIFETIME_MS:1800000}  # 30m: плановое обновление коннектов до "устаревания"
 
   jpa:
     hibernate:
