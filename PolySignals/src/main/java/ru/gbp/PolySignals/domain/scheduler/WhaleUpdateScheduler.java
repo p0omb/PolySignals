@@ -10,6 +10,7 @@ import ru.gbp.PolySignals.client.polymarket.PolymarketApiErrorHandler.Polymarket
 import ru.gbp.PolySignals.client.polymarket.PolymarketApiErrorHandler.ErrorCategory;
 import ru.gbp.PolySignals.client.polymarket.dto.LeaderboardUserDto;
 import ru.gbp.PolySignals.domain.service.WhaleService;
+import ru.gbp.PolySignals.monitoring.SchedulerHealthIndicator;
 
 import java.util.List;
 
@@ -22,6 +23,7 @@ public class WhaleUpdateScheduler {
 
     private final DataApiClient dataApiClient;
     private final WhaleService whaleService;
+    private final SchedulerHealthIndicator schedulerHealthIndicator;
 
     @Async("whaleUpdateSchedulerExecutor")
     @Scheduled(fixedDelay = 1_800_000)
@@ -30,6 +32,7 @@ public class WhaleUpdateScheduler {
             List<LeaderboardUserDto> leaderboard = dataApiClient.getTopWhales(LIMIT);
             int updated = whaleService.updateWhales(leaderboard);
             log.info("Updated {} whales", updated);
+            schedulerHealthIndicator.updateLastRun();
         } catch (PolymarketApiException e) {
             if (e.getCategory() == ErrorCategory.RATE_LIMIT) {
                 log.warn("Rate limit on whale update: {}", e.getMessage());
@@ -41,4 +44,3 @@ public class WhaleUpdateScheduler {
         }
     }
 }
-

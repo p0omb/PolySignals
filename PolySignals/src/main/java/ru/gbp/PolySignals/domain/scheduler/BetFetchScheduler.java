@@ -13,6 +13,7 @@ import ru.gbp.PolySignals.domain.entity.Bet;
 import ru.gbp.PolySignals.domain.entity.Whale;
 import ru.gbp.PolySignals.domain.repository.WhaleRepository;
 import ru.gbp.PolySignals.domain.service.BetService;
+import ru.gbp.PolySignals.monitoring.SchedulerHealthIndicator;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -30,6 +31,7 @@ public class BetFetchScheduler {
     private final WhaleRepository whaleRepository;
     private final DataApiClient dataApiClient;
     private final BetService betService;
+    private final SchedulerHealthIndicator schedulerHealthIndicator;
 
     @Async("betFetchSchedulerExecutor")
     @Scheduled(fixedDelay = 180_000)
@@ -69,6 +71,6 @@ public class BetFetchScheduler {
                 "Bet fetch: checked {}, new bets {}, rate-limited {}, failed {}",
                 checked, totalNewBets, rateLimited, failed
         );
+        schedulerHealthIndicator.updateLastRun();
     }
 }
-
