@@ -3,7 +3,7 @@ version: "3.9"
 services:
   # Spring Boot приложение (готовый образ из Docker Hub)
   app:
-    image: myuser/polysignals:latest # TODO: замените на ваш реальный registry/image:tag
+    image: p0omb/whalefollow:1.0.0
     container_name: polysignals-app
     restart: unless-stopped
     env_file:
@@ -26,8 +26,8 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      # Проверка /actuator/health внутри контейнера приложения
-      test: ["CMD-SHELL", "curl --fail http://localhost:8080/actuator/health || exit 1"]
+      # Проверка защищённого actuator на management-порту
+      test: ["CMD-SHELL", "curl --fail --silent --show-error -u \"$$ADMIN_NAME:$$ADMIN_PASSWORD\" http://localhost:9091/actuator/health >/dev/null || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -55,6 +55,7 @@ services:
       TZ: ${TZ:-UTC}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
     healthcheck:
       # Проверка готовности PostgreSQL
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
