@@ -3,6 +3,7 @@ package ru.gbp.PolySignals.client.polymarket;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.retry.support.RetryTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
@@ -15,6 +16,7 @@ public class GammaApiClient {
     private static final String MARKET_ENDPOINT = "/markets/{marketId}";
 
     private final WebClient gammaApiWebClient;
+    private final RetryTemplate polymarketRetryTemplate;
 
     @Cacheable(cacheNames = "markets", key = "#marketId")
     public MarketDetailsDto getMarket(String marketId) {
@@ -23,20 +25,22 @@ public class GammaApiClient {
         }
 
         final String endpoint = MARKET_ENDPOINT.formatted(marketId);
-        return gammaApiWebClient.get()
-                .uri(MARKET_ENDPOINT, marketId)
-                .retrieve()
-                .onStatus(HttpStatusCode::isError, response -> response.bodyToMono(String.class)
-                        .defaultIfEmpty("")
-                        .map(body -> PolymarketApiErrorHandler.buildException(
-                                response.statusCode().value(),
-                                body,
-                                endpoint,
-                                response.headers().asHttpHeaders()
-                        )))
-                .bodyToMono(MarketDetailsDto.class)
-                .onErrorMap(WebClientRequestException.class,
-                        ex -> PolymarketApiErrorHandler.fromTransportError(ex, endpoint))
-                .block();
+        return polymarketRetryTemplate.execute(context ->
+                gammaApiWebClient.get()
+                        .uri(MARKET_ENDPOINT, marketId)
+                        .retrieve()
+                        .onStatus(HttpStatusCode::isError, response -> response.bodyToMono(String.class)
+                                .defaultIfEmpty("")
+                                .map(body -> PolymarketApiErrorHandler.buildException(
+                                        response.statusCode().value(),
+                                        body,
+                                        endpoint,
+                                        response.headers().asHttpHeaders()
+                                )))
+                        .bodyToMono(MarketDetailsDto.class)
+                        .onErrorMap(WebClientRequestException.class,
+                                ex -> PolymarketApiErrorHandler.fromTransportError(ex, endpoint))
+                        .block()
+        );
     }
 }
