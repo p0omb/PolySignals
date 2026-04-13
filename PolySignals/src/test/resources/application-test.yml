@@ -1,4 +1,9 @@
 spring:
+  # Этот профиль используется для обычного `mvn test`.
+  # Здесь ожидается локальная PostgreSQL (без Testcontainers).
+  #
+  # Интеграционные тесты с Testcontainers помечены @Tag("integration")
+  # и запускаются отдельно через: mvn test -Pintegration
   main:
     allow-bean-definition-overriding: true
     lazy-initialization: true  # Ускоряет старт тестов
