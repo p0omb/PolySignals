@@ -2,6 +2,7 @@ package ru.gbp.PolySignals.domain.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 import java.math.BigDecimal;
@@ -19,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import ru.gbp.PolySignals.client.polymarket.dto.UserTradeDto;
 import ru.gbp.PolySignals.domain.entity.Bet;
 import ru.gbp.PolySignals.domain.entity.Whale;
+import ru.gbp.PolySignals.domain.event.NewBetEvent;
 import ru.gbp.PolySignals.domain.repository.BetRepository;
 import ru.gbp.PolySignals.domain.repository.WhaleRepository;
 
@@ -38,31 +40,30 @@ class BetServiceTest {
     void savesNewBetsAndPublishesEvent() {
         Whale whale = whale("user1");
         when(whaleRepository.findByUserId("user1")).thenReturn(Optional.of(whale));
-        when(betRepository.existsByUniqueKey("t1")).thenReturn(false);
+        when(betRepository.existsByUniqueKey(anyString())).thenReturn(false);
         when(betRepository.save(any(Bet.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         UserTradeDto trade = trade("m1", "yes", "20", Instant.parse("2026-01-01T10:00:00Z"));
         List<UserTradeDto> trades = List.of(trade);
 
-        List<Bet> result = betService.saveNewBets("user1", List.of(trade));
+        List<Bet> result = betService.saveNewBets("user1", trades);
 
         verify(betRepository).save(any(Bet.class));
-        verify(eventPublisher).publishEvent(any());
+        verify(eventPublisher).publishEvent(any(NewBetEvent.class)); // FIX
         assertEquals(1, result.size());
     }
 
     @Test
     void deduplicatesExistingBets() {
-        when(betRepository.existsByUniqueKey("t1")).thenReturn(true);
+        Whale whale = whale("user1");
+
+        when(whaleRepository.findByUserId("user1")).thenReturn(Optional.of(whale));
+        when(betRepository.existsByUniqueKey(anyString())).thenReturn(true);
 
         UserTradeDto trade = trade("m1", "yes", "20", Instant.now());
-        // Убедимся, что uniqueKey формируется так же, как в сервисе
-        // Предположим, что uniqueKey = externalBetId или комбинация полей
-        // Для теста можно мокировать existsByUniqueKey с любым аргументом
         List<UserTradeDto> trades = List.of(trade);
 
         List<Bet> result = betService.saveNewBets("user1", trades);
-
 
         verify(betRepository, never()).save(any());
         verifyNoInteractions(eventPublisher);
@@ -82,9 +83,8 @@ class BetServiceTest {
         UserTradeDto dto = new UserTradeDto();
         dto.setMarketId(marketId);
         dto.setOutcome(outcome);
-        dto.setSize(new BigDecimal(size));   // поле называется size, а не amount
+        dto.setSize(new BigDecimal(size));
         dto.setTimestamp(timestamp);
-        // Если нужен externalBetId, добавьте его (например, через setTransactionHash)
         dto.setTransactionHash("tx_" + System.currentTimeMillis());
         return dto;
     }

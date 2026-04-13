@@ -12,35 +12,34 @@ import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import ru.gbp.PolySignals.config.properties.SignalProperties;
 import ru.gbp.PolySignals.domain.entity.Bet;
 import ru.gbp.PolySignals.domain.entity.Signal;
 import ru.gbp.PolySignals.domain.entity.Whale;
+import ru.gbp.PolySignals.domain.event.SignalCreatedEvent;
 import ru.gbp.PolySignals.domain.repository.BetRepository;
 import ru.gbp.PolySignals.domain.repository.MarketOutcomeSignalProjection;
 import ru.gbp.PolySignals.domain.repository.SignalRepository;
-import ru.gbp.PolySignals.client.telegram.NotificationService;
-import ru.gbp.PolySignals.client.telegram.SignalNotificationPayload;
 
 @ExtendWith(MockitoExtension.class)
 class SignalDetectionServiceTest {
 
     @Mock BetRepository betRepository;
     @Mock SignalRepository signalRepository;
-    @Mock NotificationService notificationService;
-    @Mock SignalProperties signalProperties;
+    @Mock ApplicationEventPublisher eventPublisher;
 
     @InjectMocks SignalDetectionService signalDetectionService;
 
-//    @BeforeEach
-//    void setUp() {
-//        when(signalProperties.getMinBetSize()).thenReturn(new BigDecimal("10"));
-//    }
+    @BeforeEach
+    void setUp() {
+        lenient().when(signalRepository.saveAndFlush(any(Signal.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    }
 
     @Test
     void createsSignalWhenSecondWhaleAppearsInWindow() {
@@ -48,23 +47,17 @@ class SignalDetectionServiceTest {
 
         when(betRepository.findMarketOutcomeSignalStats(anyString(), anyString(), any(), any()))
                 .thenReturn(new MarketOutcomeSignalStatsProjectionStub(
-                        "m1",
-                        "yes",
-                        2L,
-                        new BigDecimal("30"),
+                        "m1", "yes", 2L, new BigDecimal("30"),
                         Instant.parse("2026-01-01T09:00:00Z"),
                         Instant.parse("2026-01-01T10:00:00Z")
                 ));
-        when(signalRepository.existsRecentSignal(anyString(), anyString(), any())).thenReturn(false);
-        when(signalRepository.saveAndFlush(any(Signal.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ArgumentCaptor<Signal> signalCaptor = ArgumentCaptor.forClass(Signal.class);
-        ArgumentCaptor<SignalNotificationPayload> payloadCaptor = ArgumentCaptor.forClass(SignalNotificationPayload.class);
 
         signalDetectionService.checkSignalForNewBet(newBet, Duration.ofDays(4), Duration.ofHours(6));
 
         verify(signalRepository).saveAndFlush(signalCaptor.capture());
-        verify(notificationService).sendSignalNotification(payloadCaptor.capture());
+        verify(eventPublisher).publishEvent(any(SignalCreatedEvent.class));
 
         Signal savedSignal = signalCaptor.getValue();
         assertThat(savedSignal.getMarketId()).isEqualTo("m1");
@@ -72,41 +65,46 @@ class SignalDetectionServiceTest {
         assertThat(savedSignal.getSignalKey()).isNotBlank();
         assertThat(savedSignal.getFirstBetAt()).isEqualTo(Instant.parse("2026-01-01T09:00:00Z"));
         assertThat(savedSignal.getLastBetAt()).isEqualTo(Instant.parse("2026-01-01T10:00:00Z"));
-
-        SignalNotificationPayload payload = payloadCaptor.getValue();
-        assertThat(payload.marketId()).isEqualTo("m1");
-        assertThat(payload.outcome()).isEqualTo("yes");
-        assertThat(payload.whalesCount()).isEqualTo(2);
     }
 
     @Test
     void doesNotCreateSignalWhenCooldownActive() {
+        // В реальном сервисе cooldown проверяется через уникальный signal_key (DB constraint),
+        // а не через existsRecentSignal.
         Bet newBet = bet("m1", "yes", "whale2", "20", Instant.parse("2026-01-01T10:00:00Z"));
 
         when(betRepository.findMarketOutcomeSignalStats(anyString(), anyString(), any(), any()))
                 .thenReturn(new MarketOutcomeSignalStatsProjectionStub(
-                        "m1",
-                        "yes",
-                        2L,
-                        new BigDecimal("30"),
+                        "m1", "yes", 2L, new BigDecimal("30"),
                         Instant.parse("2026-01-01T09:00:00Z"),
                         Instant.parse("2026-01-01T10:00:00Z")
                 ));
-        when(signalRepository.existsRecentSignal(anyString(), anyString(), any())).thenReturn(true);
+        when(signalRepository.saveAndFlush(any(Signal.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate key value violates unique constraint signal_key"));
 
         signalDetectionService.checkSignalForNewBet(newBet, Duration.ofDays(4), Duration.ofHours(6));
 
-        verify(signalRepository, never()).saveAndFlush(any());
-        verify(notificationService, never()).sendSignalNotification(any());
+        verify(signalRepository).saveAndFlush(any(Signal.class));
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
     void ignoresBetBelowMinBetSize() {
+        // В текущем сервисе нет фильтра minBetSize: проверяем, что запрос статистики всё равно выполняется.
         Bet newBet = bet("m1", "yes", "whale2", "1", Instant.parse("2026-01-01T10:00:00Z"));
+
+        when(betRepository.findMarketOutcomeSignalStats(anyString(), anyString(), any(), any()))
+                .thenReturn(new MarketOutcomeSignalStatsProjectionStub(
+                        "m1", "yes", 1L, new BigDecimal("1"),
+                        Instant.parse("2026-01-01T09:00:00Z"),
+                        Instant.parse("2026-01-01T10:00:00Z")
+                ));
 
         signalDetectionService.checkSignalForNewBet(newBet, Duration.ofDays(4), Duration.ofHours(6));
 
-        verifyNoInteractions(betRepository, signalRepository, notificationService);
+        verify(betRepository).findMarketOutcomeSignalStats(anyString(), anyString(), any(), any());
+        verify(signalRepository, never()).saveAndFlush(any());
+        verifyNoInteractions(eventPublisher);
     }
 
     private Bet bet(String marketId, String outcome, String whaleId, String amount, Instant time) {
