@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,6 +25,7 @@ import ru.gbp.PolySignals.domain.service.BetService;
 
 @SpringBootTest
 @ActiveProfiles("test")
+@Tag("integration")
 class BetFetchSchedulerTest {
 
     @MockitoBean
