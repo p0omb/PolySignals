@@ -20,6 +20,11 @@ spring:
       name: ${ADMIN_NAME:admin}
       password: ${ADMIN_PASSWORD}
 
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
 management:
   server:
     port: 9091
