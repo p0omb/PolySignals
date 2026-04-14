@@ -51,23 +51,42 @@ class WhaleUpdateSchedulerIntegrationTest extends AbstractPostgresIntegrationTes
 
     @Test
     void updatesWhalesFromLeaderboard() {
-        wiremock.stubFor(get(urlPathEqualTo("/leaderboard/users"))
+        wiremock.stubFor(get(urlPathEqualTo("/v1/leaderboard"))
                 .withQueryParam("limit", equalTo("100"))
+                .withQueryParam("offset", equalTo("0"))
+                .withQueryParam("orderBy", equalTo("PNL"))
+                .withQueryParam("timePeriod", equalTo("WEEK"))
+                .withQueryParam("category", equalTo("OVERALL"))
                 .willReturn(okJson("""
-                        [{"userId":"u1","label":"whale-1","volume":100}]
+                        [
+                          {
+                            "rank": 1,
+                            "proxyWallet": "0xabc123",
+                            "userName": "whale-1",
+                            "vol": 100.0,
+                            "pnl": 25.5,
+                            "profileImage": null,
+                            "xUsername": null,
+                            "verifiedBadge": false
+                          }
+                        ]
                         """)));
 
         whaleUpdateScheduler.run();
 
-        assertThat(whaleRepository.findByUserId("u1"))
+        assertThat(whaleRepository.findByUserId("0xabc123"))
                 .isPresent()
                 .get()
                 .satisfies(whale -> {
                     assertThat(whale.getUserName()).isEqualTo("whale-1");
-                    assertThat(whale.getVolume()).isEqualByComparingTo(new BigDecimal("100"));
+                    assertThat(whale.getVolume()).isEqualByComparingTo(new BigDecimal("100.0"));
                 });
 
-        wiremock.verify(getRequestedFor(urlPathEqualTo("/leaderboard/users"))
-                .withQueryParam("limit", equalTo("100")));
+        wiremock.verify(getRequestedFor(urlPathEqualTo("/v1/leaderboard"))
+                .withQueryParam("limit", equalTo("100"))
+                .withQueryParam("offset", equalTo("0"))
+                .withQueryParam("orderBy", equalTo("PNL"))
+                .withQueryParam("timePeriod", equalTo("WEEK"))
+                .withQueryParam("category", equalTo("OVERALL")));
     }
 }

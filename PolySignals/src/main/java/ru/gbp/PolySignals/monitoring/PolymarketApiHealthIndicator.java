@@ -8,7 +8,6 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
-
 import java.time.Duration;
 
 @Component("polymarketApi")
@@ -16,6 +15,8 @@ import java.time.Duration;
 public class PolymarketApiHealthIndicator implements HealthIndicator {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(5);
+    private static final String LEADERBOARD_ENDPOINT_TEMPLATE =
+            "%s/v1/leaderboard?limit=1&offset=0&orderBy=PNL&timePeriod=DAY&category=OVERALL";
 
     private final WebClient.Builder webClientBuilder;
 
@@ -24,10 +25,12 @@ public class PolymarketApiHealthIndicator implements HealthIndicator {
 
     @Override
     public Health health() {
+        final String endpoint = LEADERBOARD_ENDPOINT_TEMPLATE.formatted(dataApiBaseUrl);
+
         try {
             HttpStatusCode status = webClientBuilder.build()
                     .get()
-                    .uri(dataApiBaseUrl + "/leaderboard/users?limit=1")
+                    .uri(endpoint)
                     .retrieve()
                     .toBodilessEntity()
                     .block(TIMEOUT)
@@ -35,18 +38,18 @@ public class PolymarketApiHealthIndicator implements HealthIndicator {
 
             if (status.is2xxSuccessful()) {
                 return Health.up()
-                        .withDetail("endpoint", dataApiBaseUrl + "/leaderboard/users?limit=1")
+                        .withDetail("endpoint", endpoint)
                         .withDetail("status", status.value())
                         .build();
             }
 
             return Health.down()
-                    .withDetail("endpoint", dataApiBaseUrl + "/leaderboard/users?limit=1")
+                    .withDetail("endpoint", endpoint)
                     .withDetail("status", status.value())
                     .build();
         } catch (Exception ex) {
             return Health.down(ex)
-                    .withDetail("endpoint", dataApiBaseUrl + "/leaderboard/users?limit=1")
+                    .withDetail("endpoint", endpoint)
                     .build();
         }
     }
