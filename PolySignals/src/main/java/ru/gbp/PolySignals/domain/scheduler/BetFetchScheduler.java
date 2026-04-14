@@ -49,7 +49,7 @@ public class BetFetchScheduler {
             checked++;
             String userId = whale.getUserId();
             try {
-                List<UserTradeDto> trades = dataApiClient.getUserTrades(userId, after, TRADES_LIMIT);
+                List<UserTradeDto> trades = dataApiClient.getUserTradesSince(userId, after, TRADES_LIMIT);
                 List<Bet> saved = betService.saveNewBets(userId, trades);
                 totalNewBets += saved.size();
                 log.debug("Whale {}: {} new bets", userId, saved.size());

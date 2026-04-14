@@ -56,17 +56,17 @@ class BetFetchSchedulerTest {
 
     @Test
     void fetchesTradesForEachWhale() {
-        Whale w1 = whale("u1");
-        Whale w2 = whale("u2");
+        Whale w1 = whale("0x56687bf447db6ffa42ffe2204a05edaa20f55839");
+        Whale w2 = whale("0x9e2b3a7d4c8f1e6a9b2c3d4e5f6a7b8c9d0e1f2a");
 
         when(whaleRepository.findTopWhales(100)).thenReturn(List.of(w1, w2));
-        when(dataApiClient.getUserTrades(anyString(), any(Instant.class), eq(200)))
+        when(dataApiClient.getUserTradesSince(anyString(), any(Instant.class), eq(200)))
                 .thenReturn(List.of(new UserTradeDto()));
         when(betService.saveNewBets(anyString(), anyList())).thenReturn(List.of(new Bet()));
 
         betFetchScheduler.run();
 
-        verify(dataApiClient, times(2)).getUserTrades(anyString(), any(Instant.class), eq(200));
+        verify(dataApiClient, times(2)).getUserTradesSince(anyString(), any(Instant.class), eq(200));
         verify(betService, times(2)).saveNewBets(anyString(), anyList());
     }
 
