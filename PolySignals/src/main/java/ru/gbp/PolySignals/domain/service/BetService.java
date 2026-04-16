@@ -1,6 +1,7 @@
 package ru.gbp.PolySignals.domain.service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,7 +15,9 @@ import ru.gbp.PolySignals.domain.repository.WhaleRepository;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class BetService {
@@ -29,31 +32,55 @@ public class BetService {
                 .orElseThrow(() -> new IllegalStateException("Whale not found: " + userId));
 
         List<Bet> newBets = new ArrayList<>();
+        if (trades == null || trades.isEmpty()) {
+            return newBets;
+        }
 
         for (UserTradeDto t : trades) {
-            String uk = buildUniqueKey(whale.getUserId(), t.getMarketId(), t.getOutcome(), t.getTimestamp());
+            if (t == null) {
+                log.warn("Skip null trade for user {}", userId);
+                continue;
+            }
 
+            String marketId = t.getMarketId();
+            String normalizedOutcome = normalizeOutcome(t.getOutcome());
+            Instant timestamp = t.getTimestamp();
+
+            if (marketId == null || marketId.isBlank() || normalizedOutcome == null || timestamp == null) {
+                log.warn("Skip invalid trade for user {}: marketId='{}', outcome='{}', timestamp={}",
+                        userId, marketId, normalizedOutcome, timestamp);
+                continue;
+            }
+
+            String uk = buildUniqueKey(whale.getUserId(), marketId, normalizedOutcome, timestamp);
             if (betRepository.existsByUniqueKey(uk)) {
                 continue;
             }
 
             Bet bet = new Bet();
             bet.setWhale(whale);
-            bet.setMarketId(t.getMarketId());
-            bet.setOutcome(t.getOutcome());
+            bet.setMarketId(marketId);
+            bet.setOutcome(normalizedOutcome);
             bet.setAmount(t.getSize());
             bet.setTransactionHash(t.getTransactionHash());
-            bet.setTransactionTime(t.getTimestamp());
+            bet.setTransactionTime(timestamp);
             bet.setCreatedAt(Instant.now());
             bet.setUniqueKey(uk);
 
             Bet savedBet = betRepository.save(bet);
             newBets.add(savedBet);
-
             eventPublisher.publishEvent(new NewBetEvent(savedBet));
         }
 
         return newBets;
+    }
+
+    private String normalizeOutcome(String outcome) {
+        if (outcome == null) {
+            return null;
+        }
+        String trimmed = outcome.trim();
+        return trimmed.isEmpty() ? null : trimmed.toUpperCase(Locale.ROOT);
     }
 
     private String buildUniqueKey(String userId, String marketId, String outcome, Instant time) {

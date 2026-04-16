@@ -2,6 +2,7 @@ package ru.gbp.PolySignals.domain.scheduler;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -32,6 +33,9 @@ public class BetFetchScheduler {
     private final DataApiClient dataApiClient;
     private final BetService betService;
     private final SchedulerHealthIndicator schedulerHealthIndicator;
+
+    @Value("${app.polymarket.request-delay-ms:75}")
+    private long requestDelayMs;
 
     @Async("betFetchSchedulerExecutor")
     @Scheduled(fixedDelay = 180_000)
@@ -65,6 +69,10 @@ public class BetFetchScheduler {
                 failed++;
                 log.error("Bet fetch failed for whale {}", userId, e);
             }
+
+            if (!applyRequestDelay()) {
+                break;
+            }
         }
 
         log.info(
@@ -72,5 +80,19 @@ public class BetFetchScheduler {
                 checked, totalNewBets, rateLimited, failed
         );
         schedulerHealthIndicator.updateLastRun();
+    }
+
+    private boolean applyRequestDelay() {
+        if (requestDelayMs <= 0) {
+            return true;
+        }
+        try {
+            Thread.sleep(requestDelayMs);
+            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("BetFetchScheduler interrupted during request delay");
+            return false;
+        }
     }
 }
