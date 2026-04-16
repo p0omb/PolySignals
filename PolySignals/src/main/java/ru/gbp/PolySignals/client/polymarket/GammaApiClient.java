@@ -24,23 +24,31 @@ public class GammaApiClient {
             throw new IllegalArgumentException("marketId must not be blank");
         }
 
-        final String endpoint = MARKET_ENDPOINT.formatted(marketId);
+        final String endpoint = MARKET_ENDPOINT.replace("{marketId}", marketId);
+
         return polymarketRetryTemplate.execute(context ->
                 gammaApiWebClient.get()
                         .uri(MARKET_ENDPOINT, marketId)
                         .retrieve()
-                        .onStatus(HttpStatusCode::isError, response -> response.bodyToMono(String.class)
-                                .defaultIfEmpty("")
-                                .map(body -> PolymarketApiErrorHandler.buildException(
-                                        response.statusCode().value(),
-                                        body,
-                                        endpoint,
-                                        response.headers().asHttpHeaders()
-                                )))
+                        .onStatus(this::isRetryableStatus,
+                                response -> response.createException().map(ex -> (Throwable) ex))
+                        .onStatus(HttpStatusCode::isError,
+                                response -> response.bodyToMono(String.class)
+                                        .defaultIfEmpty("")
+                                        .map(body -> PolymarketApiErrorHandler.buildException(
+                                                response.statusCode().value(),
+                                                body,
+                                                endpoint,
+                                                response.headers().asHttpHeaders()
+                                        )))
                         .bodyToMono(MarketDetailsDto.class)
                         .onErrorMap(WebClientRequestException.class,
                                 ex -> PolymarketApiErrorHandler.fromTransportError(ex, endpoint))
                         .block()
         );
+    }
+
+    private boolean isRetryableStatus(HttpStatusCode statusCode) {
+        return statusCode.value() == 429 || statusCode.is5xxServerError();
     }
 }

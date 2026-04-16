@@ -97,7 +97,6 @@
 //                        .block()
 //        );
 //    }
-//}
 package ru.gbp.PolySignals.client.polymarket;
 
 import lombok.RequiredArgsConstructor;
@@ -106,11 +105,13 @@ import org.springframework.retry.support.RetryTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import ru.gbp.PolySignals.client.polymarket.dto.LeaderboardUserDto;
 import ru.gbp.PolySignals.client.polymarket.dto.TraderLeaderboardEntry;
 import ru.gbp.PolySignals.client.polymarket.dto.UserTradeDto;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -151,6 +152,8 @@ public class DataApiClient {
                                 .queryParam("category", category)
                                 .build())
                         .retrieve()
+                        .onStatus(this::isRetryableStatus, response ->
+                                response.createException().map(ex -> (Throwable) ex))
                         .onStatus(HttpStatusCode::isError, response -> response.bodyToMono(String.class)
                                 .defaultIfEmpty("")
                                 .map(body -> PolymarketApiErrorHandler.buildException(
@@ -189,6 +192,8 @@ public class DataApiClient {
                                 .queryParam("takerOnly", true)
                                 .build())
                         .retrieve()
+                        .onStatus(this::isRetryableStatus, response ->
+                                response.createException().map(ex -> (Throwable) ex))
                         .onStatus(HttpStatusCode::isError, response -> response.bodyToMono(String.class)
                                 .defaultIfEmpty("")
                                 .map(body -> PolymarketApiErrorHandler.buildException(
@@ -207,9 +212,50 @@ public class DataApiClient {
 
     public List<UserTradeDto> getUserTradesSince(String userAddress, Instant sinceTimestamp, int maxResults) {
         Objects.requireNonNull(sinceTimestamp, "sinceTimestamp must not be null");
-        return getUserTrades(userAddress, maxResults, 0).stream()
-                .filter(trade -> trade.getTimestamp() != null && trade.getTimestamp().isAfter(sinceTimestamp))
-                .toList();
+        if (maxResults <= 0) {
+            throw new IllegalArgumentException("maxResults must be > 0");
+        }
+        int pageSize = Math.min(maxResults, 200);
+        List<UserTradeDto> all = getAllUserTradesSince(userAddress, sinceTimestamp, pageSize);
+        return all.size() <= maxResults ? all : all.subList(0, maxResults);
+    }
+
+    public List<UserTradeDto> getAllUserTradesSince(String userAddress, Instant afterTimestamp, int pageSize) {
+        Objects.requireNonNull(afterTimestamp, "afterTimestamp must not be null");
+        if (pageSize <= 0 || pageSize > 10000) {
+            throw new IllegalArgumentException("pageSize must be between 1 and 10000");
+        }
+
+        List<UserTradeDto> result = new ArrayList<>();
+        int offset = 0;
+        boolean reachedOlderTrades = false;
+
+        while (true) {
+            List<UserTradeDto> batch = getUserTrades(userAddress, pageSize, offset);
+            if (batch == null || batch.isEmpty()) {
+                break;
+            }
+
+            for (UserTradeDto trade : batch) {
+                Instant ts = trade.getTimestamp();
+                if (ts != null && (ts.isAfter(afterTimestamp) || ts.equals(afterTimestamp))) {
+                    result.add(trade);
+                } else {
+                    reachedOlderTrades = true;
+                }
+            }
+
+            if (batch.size() < pageSize || reachedOlderTrades) {
+                break;
+            }
+            offset += pageSize;
+        }
+
+        return result;
+    }
+
+    private boolean isRetryableStatus(HttpStatusCode statusCode) {
+        return statusCode.value() == 429 || statusCode.is5xxServerError();
     }
 
     private LeaderboardUserDto toLeaderboardUserDto(TraderLeaderboardEntry entry) {
