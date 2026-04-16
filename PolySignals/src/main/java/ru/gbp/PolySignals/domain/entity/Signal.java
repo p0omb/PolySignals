@@ -5,6 +5,8 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "signal", indexes = {
@@ -57,4 +59,9 @@ public class Signal {
 
     @Column(name = "reason", length = 512)
     private String reason;
+
+    @ElementCollection
+    @CollectionTable(name = "signal_whale_labels", joinColumns = @JoinColumn(name = "signal_id"))
+    @Column(name = "label")
+    private List<String> whaleLabels = new ArrayList<>();
 }

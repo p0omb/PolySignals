@@ -8,6 +8,7 @@ import org.springframework.retry.support.RetryTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 import ru.gbp.PolySignals.client.telegram.NotificationService;
@@ -39,6 +40,7 @@ public class SignalNotificationRetryService {
         trySend(event.signalId());
     }
 
+    @Transactional
     @Scheduled(fixedDelayString = "${app.notification.retry.delay:60000}")
     public void retryUnsentSignals() {
         int batchSize = 100;

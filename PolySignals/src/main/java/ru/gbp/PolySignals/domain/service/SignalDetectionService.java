@@ -5,6 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import ru.gbp.PolySignals.client.polymarket.GammaApiClient;
+import ru.gbp.PolySignals.client.polymarket.dto.MarketDetailsDto;
 import ru.gbp.PolySignals.domain.entity.Bet;
 import ru.gbp.PolySignals.domain.entity.Signal;
 import ru.gbp.PolySignals.domain.event.SignalCreatedEvent;
@@ -30,6 +32,7 @@ public class SignalDetectionService {
     private final BetRepository betRepository;
     private final SignalRepository signalRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final GammaApiClient gammaApiClient;
 
     public void checkSignalForNewBet(Bet newBet, Duration signalWindow, Duration cooldown) {
         Objects.requireNonNull(newBet, "newBet must not be null");
@@ -82,6 +85,7 @@ public class SignalDetectionService {
             return;
         }
 
+
         Signal signal = new Signal();
         signal.setMarketId(stats.getMarketId());
         signal.setOutcome(stats.getOutcome());
@@ -94,6 +98,16 @@ public class SignalDetectionService {
         signal.setTelegramSent(false);
         signal.setPeriodHours(Math.toIntExact(signalWindow.toHours()));
         signal.setSignalKey(buildSignalKey(stats.getMarketId(), stats.getOutcome(), to, cooldown));
+
+        try {
+            MarketDetailsDto market = gammaApiClient.getMarket(stats.getMarketId());
+            if (market != null) {
+                signal.setMarketQuestion(market.getQuestion());
+                signal.setMarketUrl("https://polymarket.com/event/" + market.getSlug()); // или сформировать из slug
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch market details for {}", stats.getMarketId(), e);
+        }
 
         Signal savedSignal;
         try {
