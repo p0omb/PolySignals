@@ -148,12 +148,20 @@
             <scope>test</scope>
         </dependency>
         <!-- Source: https://mvnrepository.com/artifact/org.wiremock/wiremock -->
+<!--        <dependency>-->
+<!--            <groupId>org.wiremock</groupId>-->
+<!--            <artifactId>wiremock</artifactId>-->
+<!--            <version>3.12.1</version>-->
+<!--            <scope>test</scope>-->
+<!--        </dependency>-->
+        <!-- Source: https://mvnrepository.com/artifact/org.wiremock/wiremock-standalone -->
         <dependency>
             <groupId>org.wiremock</groupId>
-            <artifactId>wiremock</artifactId>
-            <version>3.12.1</version>
+            <artifactId>wiremock-standalone</artifactId>
+            <version>3.13.0</version>
             <scope>test</scope>
         </dependency>
+
         <!-- Source: https://mvnrepository.com/artifact/org.awaitility/awaitility -->
         <dependency>
             <groupId>org.awaitility</groupId>
