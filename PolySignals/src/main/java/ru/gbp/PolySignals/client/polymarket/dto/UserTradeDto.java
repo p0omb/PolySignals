@@ -12,11 +12,16 @@ import java.time.Instant;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class UserTradeDto {
 
-    @JsonAlias({"marketId", "market_id", "market"})
+    @JsonAlias({"marketId", "conditionId", "condition_id"})
     private String marketId;
 
-    @JsonAlias({"outcome", "side"})
+    // Основное поле исхода (Yes/No/Up/Down и т.п.)
+    @JsonAlias({"outcome"})
     private String outcome;
+
+    // Числовой идентификатор исхода, иногда приходит вместо outcome
+    @JsonAlias({"asset"})
+    private String asset;
 
     @JsonAlias({"size", "amount", "tradeAmount"})
     private BigDecimal size;
@@ -25,6 +30,20 @@ public class UserTradeDto {
     private String transactionHash;
 
     private Instant timestamp;
+
+    @JsonSetter("outcome")
+    public void setOutcomeRaw(String outcome) {
+        this.outcome = normalizeOutcome(outcome);
+    }
+
+    @JsonSetter("asset")
+    public void setAssetRaw(Object raw) {
+        this.asset = raw == null ? null : String.valueOf(raw);
+        // fallback только если outcome не задан
+        if (this.outcome == null || this.outcome.isBlank()) {
+            this.outcome = this.asset;
+        }
+    }
 
     @JsonSetter("timestamp")
     public void setTimestampRaw(Object raw) {
@@ -41,6 +60,14 @@ public class UserTradeDto {
         this.timestamp = parseTimestamp(raw);
     }
 
+    private String normalizeOutcome(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
     private Instant parseTimestamp(Object raw) {
         if (raw == null) {
             return null;
@@ -48,7 +75,6 @@ public class UserTradeDto {
 
         if (raw instanceof Number n) {
             long value = n.longValue();
-            // <= 10 digits: epoch seconds, otherwise epoch millis
             return String.valueOf(Math.abs(value)).length() <= 10
                     ? Instant.ofEpochSecond(value)
                     : Instant.ofEpochMilli(value);
@@ -59,9 +85,9 @@ public class UserTradeDto {
             if (trimmed.isEmpty()) {
                 return null;
             }
-            if (trimmed.matches("^\\d+$")) {
+            if (trimmed.matches("^-?\\d+$")) {
                 long value = Long.parseLong(trimmed);
-                return trimmed.length() <= 10
+                return String.valueOf(Math.abs(value)).length() <= 10
                         ? Instant.ofEpochSecond(value)
                         : Instant.ofEpochMilli(value);
             }
@@ -71,4 +97,3 @@ public class UserTradeDto {
         throw new IllegalArgumentException("Unsupported timestamp format: " + raw);
     }
 }
-
