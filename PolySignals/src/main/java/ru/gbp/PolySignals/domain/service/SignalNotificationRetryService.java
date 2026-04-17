@@ -116,9 +116,9 @@ public class SignalNotificationRetryService {
             log.debug("Signal {} already marked telegramSent by another worker", signalId);
         }
 
-        fresh.setTelegramSent(true);
-        fresh.setTelegramSentAt(Instant.now());
-        signalRepository.saveAndFlush(fresh);
+//        fresh.setTelegramSent(true);
+//        fresh.setTelegramSentAt(Instant.now());
+//        signalRepository.saveAndFlush(fresh);
 
         log.info("sendOnce success, signalId={}", signalId);
     }
