@@ -48,8 +48,7 @@ public class GammaApiClient {
                                     response.headers().asHttpHeaders()
                             )))
                     .bodyToMono(new ParameterizedTypeReference<List<MarketDetailsDto>>() {})
-                    .onErrorMap(WebClientRequestException.class,
-                            ex -> PolymarketApiErrorHandler.fromTransportError(ex, endpoint))
+                    .doOnError(e -> log.error("Gamma API error for marketId={}: {}", marketId, e.getMessage(), e))
                     .block();
 
             if (markets == null || markets.isEmpty()) {
