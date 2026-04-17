@@ -61,7 +61,7 @@ class SignalDetectionServiceTest {
 
         Signal savedSignal = signalCaptor.getValue();
         assertThat(savedSignal.getMarketId()).isEqualTo("m1");
-        assertThat(savedSignal.getOutcome()).isEqualTo("yes");
+        assertThat(savedSignal.getOutcome()).isEqualTo("YES");
         assertThat(savedSignal.getSignalKey()).isNotBlank();
         assertThat(savedSignal.getFirstBetAt()).isEqualTo(Instant.parse("2026-01-01T09:00:00Z"));
         assertThat(savedSignal.getLastBetAt()).isEqualTo(Instant.parse("2026-01-01T10:00:00Z"));

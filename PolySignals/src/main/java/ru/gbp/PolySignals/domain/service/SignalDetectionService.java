@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -85,10 +86,19 @@ public class SignalDetectionService {
             return;
         }
 
+        String normalizedMarketId = normalizeMarketId(stats.getMarketId());
+        String normalizedOutcome = normalizeOutcome(stats.getOutcome());
+
+        List<String> whaleLabels = betRepository
+                .findDistinctWhaleNamesByMarketOutcomeAndTimeRange(normalizedMarketId, normalizedOutcome, from, to)
+                .stream()
+                .filter(this::hasText)
+                .distinct()
+                .collect(Collectors.toList());
 
         Signal signal = new Signal();
-        signal.setMarketId(stats.getMarketId());
-        signal.setOutcome(stats.getOutcome());
+        signal.setMarketId(normalizedMarketId);
+        signal.setOutcome(normalizedOutcome);
         signal.setWhalesCount(Math.toIntExact(stats.getWhalesCount()));
         signal.setTotalAmount(Objects.requireNonNullElse(stats.getTotalAmount(), BigDecimal.ZERO));
         signal.setFirstBetAt(stats.getFirstBetAt());
@@ -97,16 +107,26 @@ public class SignalDetectionService {
         signal.setCreatedAt(to);
         signal.setTelegramSent(false);
         signal.setPeriodHours(Math.toIntExact(signalWindow.toHours()));
-        signal.setSignalKey(buildSignalKey(stats.getMarketId(), stats.getOutcome(), to, cooldown));
+        signal.setWhaleLabels(whaleLabels);
+
+        String signalKey = buildSignalKey(normalizedMarketId, normalizedOutcome, to, cooldown);
+        signal.setSignalKey(signalKey);
+
+        log.debug(
+                "Signal key built: key={}, marketId={}, outcome={}, from={}, to={}, cooldown={}",
+                signalKey, normalizedMarketId, normalizedOutcome, from, to, cooldown
+        );
 
         try {
-            MarketDetailsDto market = gammaApiClient.getMarket(stats.getMarketId());
+            MarketDetailsDto market = gammaApiClient.getMarket(normalizedMarketId);
             if (market != null) {
                 signal.setMarketQuestion(market.getQuestion());
-                signal.setMarketUrl("https://polymarket.com/event/" + market.getSlug()); // или сформировать из slug
+                if (hasText(market.getSlug())) {
+                    signal.setMarketUrl("https://polymarket.com/event/" + market.getSlug().trim());
+                }
             }
         } catch (Exception e) {
-            log.warn("Failed to fetch market details for {}", stats.getMarketId(), e);
+            log.warn("Failed to fetch market details for {}", normalizedMarketId, e);
         }
 
         Signal savedSignal;
@@ -132,9 +152,22 @@ public class SignalDetectionService {
         validatePositiveDuration("cooldown", cooldown);
 
         long cooldownSeconds = cooldown.getSeconds();
-        long bucketStartEpoch = (signalTime.getEpochSecond() / cooldownSeconds) * cooldownSeconds;
+        long alignedCooldownSeconds = alignCooldownSeconds(cooldownSeconds);
+        long bucketStartEpoch = (signalTime.getEpochSecond() / alignedCooldownSeconds) * alignedCooldownSeconds;
 
         return normalizeMarketId(marketId) + ":" + normalizeOutcome(outcome) + ":" + bucketStartEpoch;
+    }
+
+    private long alignCooldownSeconds(long cooldownSeconds) {
+        if (cooldownSeconds <= 0) {
+            throw new IllegalArgumentException("cooldown must be positive");
+        }
+        if (cooldownSeconds % 3600 == 0) {
+            return cooldownSeconds;
+        }
+        long aligned = ((cooldownSeconds + 3599) / 3600) * 3600;
+        log.warn("Cooldown {}s is not multiple of 3600s, aligned to {}s for stable signal buckets", cooldownSeconds, aligned);
+        return aligned;
     }
 
     private String normalizeMarketId(String marketId) {
@@ -186,5 +219,9 @@ public class SignalDetectionService {
             current = current.getCause();
         }
         return false;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 }

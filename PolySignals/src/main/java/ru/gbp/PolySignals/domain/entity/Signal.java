@@ -30,7 +30,7 @@ public class Signal {
     @Column(name = "market_url", length = 512)
     private String marketUrl;
 
-    @Column(name = "outcome", nullable = false, length = 16)
+    @Column(name = "outcome", nullable = false, length = 255)
     private String outcome;
 
     @Column(name = "whales_count", nullable = false)
