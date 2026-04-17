@@ -3,12 +3,19 @@ package ru.gbp.PolySignals.client.telegram;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Objects;
 import java.util.StringJoiner;
 
 @Component
 public class TelegramMessageFormatter {
+
+    private static final ZoneId MOSCOW_ZONE = ZoneId.of("Europe/Moscow");
+    private static final DateTimeFormatter DATE_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(MOSCOW_ZONE);
 
     public String formatSignal(SignalNotificationPayload payload) {
         Objects.requireNonNull(payload, "payload must not be null");
@@ -24,7 +31,7 @@ public class TelegramMessageFormatter {
         message.append(lineText("Outcome", outcome));
         message.append(lineText("Whales matched", String.valueOf(payload.whalesCount())));
         message.append(lineText("Total amount", formatAmount(payload.totalAmount())));
-        message.append(lineText("Window", payload.firstBetAt() + " — " + payload.lastBetAt()));
+        message.append(lineText("Window", formatInstant(payload.firstBetAt()) + " — " + formatInstant(payload.lastBetAt())));
         message.append(lineText("Whales", whales));
 
         if (reason != null) {
@@ -101,5 +108,12 @@ public class TelegramMessageFormatter {
 
     private String escapeHtmlAttribute(String value) {
         return escapeHtml(value);
+    }
+
+    private String formatInstant(Instant instant) {
+        if (instant == null) {
+            return "n/a";
+        }
+        return DATE_TIME_FORMATTER.format(instant);
     }
 }
