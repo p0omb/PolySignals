@@ -8,6 +8,7 @@ import static org.mockito.Mockito.*;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,6 +20,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import ru.gbp.PolySignals.client.polymarket.GammaApiClient;
 import ru.gbp.PolySignals.domain.entity.Bet;
 import ru.gbp.PolySignals.domain.entity.Signal;
 import ru.gbp.PolySignals.domain.entity.Whale;
@@ -33,12 +35,16 @@ class SignalDetectionServiceTest {
     @Mock BetRepository betRepository;
     @Mock SignalRepository signalRepository;
     @Mock ApplicationEventPublisher eventPublisher;
+    @Mock GammaApiClient gammaApiClient;
 
     @InjectMocks SignalDetectionService signalDetectionService;
 
     @BeforeEach
     void setUp() {
         lenient().when(signalRepository.saveAndFlush(any(Signal.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(betRepository.findDistinctWhaleNamesByMarketOutcomeAndTimeRange(anyString(), anyString(), any(), any()))
+                .thenReturn(List.of("whale1", "whale2"));
+        lenient().when(gammaApiClient.getMarket(anyString())).thenReturn(null);
     }
 
     @Test

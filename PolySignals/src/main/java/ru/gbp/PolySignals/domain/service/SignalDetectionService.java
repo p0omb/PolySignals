@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -29,6 +30,7 @@ import java.util.stream.Collectors;
 public class SignalDetectionService {
 
     private static final int MIN_WHALES = 2;
+    private final AtomicReference<Instant> lastDetectAndSendAt = new AtomicReference<>();
 
     private final BetRepository betRepository;
     private final SignalRepository signalRepository;
@@ -49,6 +51,10 @@ public class SignalDetectionService {
     public void detectAndSendSignals(Duration period, Duration cooldown) {
         validatePositiveDuration("period", period);
         validatePositiveDuration("cooldown", cooldown);
+
+        if (shouldSkipDetectAndSend(cooldown)) {
+            return;
+        }
 
         Instant to = Instant.now();
         Instant from = to.minus(period);
@@ -120,12 +126,15 @@ public class SignalDetectionService {
         try {
             MarketDetailsDto market = gammaApiClient.getMarket(normalizedMarketId);
             if (market != null) {
-                signal.setMarketQuestion(market.getQuestion());
-                if (hasText(market.getSlug())) {
-                    signal.setMarketUrl("https://polymarket.com/event/" + market.getSlug().trim());
+                if (hasText(market.getQuestion())) {
+                    signal.setMarketQuestion(market.getQuestion().trim());
                 }
+                signal.setMarketUrl(resolveMarketUrl(market, normalizedMarketId));
+            } else {
+                signal.setMarketUrl("https://polymarket.com/event/" + normalizedMarketId);
             }
         } catch (Exception e) {
+            signal.setMarketUrl("https://polymarket.com/event/" + normalizedMarketId);
             log.warn("Failed to fetch market details for {}", normalizedMarketId, e);
         }
 
@@ -223,5 +232,36 @@ public class SignalDetectionService {
 
     private boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    private boolean shouldSkipDetectAndSend(Duration cooldown) {
+        Instant now = Instant.now();
+        Instant prev = lastDetectAndSendAt.get();
+        if (prev != null && prev.plus(cooldown).isAfter(now)) {
+            log.info("detectAndSendSignals skipped by cooldown guard: lastRun={}, cooldown={}", prev, cooldown);
+            return true;
+        }
+        lastDetectAndSendAt.set(now);
+        return false;
+    }
+
+    private String resolveMarketUrl(MarketDetailsDto market, String fallbackMarketId) {
+        if (market == null) {
+            return "https://polymarket.com/event/" + fallbackMarketId;
+        }
+        if (hasText(market.getUrl())) {
+            String url = market.getUrl().trim();
+            if (url.startsWith("http://") || url.startsWith("https://")) {
+                return url;
+            }
+            return "https://polymarket.com/event/" + url;
+        }
+        if (hasText(market.getSlug())) {
+            return "https://polymarket.com/event/" + market.getSlug().trim();
+        }
+        if (hasText(market.getMarketId())) {
+            return "https://polymarket.com/event/" + market.getMarketId().trim();
+        }
+        return "https://polymarket.com/event/" + fallbackMarketId;
     }
 }
