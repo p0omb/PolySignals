@@ -2,6 +2,7 @@ package ru.gbp.PolySignals.client.polymarket.dto;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 import java.time.Instant;
@@ -11,13 +12,18 @@ import java.util.List;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class MarketDetailsDto {
 
-    @JsonAlias({"id", "marketId", "market_id"})
+    @JsonProperty("id")
+    @JsonAlias({"marketId", "market_id", "conditionId", "condition_id"})
     private String marketId;
 
+    @JsonProperty("question")
     private String question;
+
+    @JsonProperty("slug")
     private String slug;
 
-    @JsonAlias({"url", "marketUrl", "market_url"})
+    @JsonProperty("url")
+    @JsonAlias({"marketUrl", "market_url"})
     private String url;
 
     @JsonAlias({"active", "isActive"})
