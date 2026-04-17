@@ -105,7 +105,6 @@ import org.springframework.retry.support.RetryTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
-import org.springframework.web.reactive.function.client.WebClientResponseException;
 import ru.gbp.PolySignals.client.polymarket.dto.LeaderboardUserDto;
 import ru.gbp.PolySignals.client.polymarket.dto.TraderLeaderboardEntry;
 import ru.gbp.PolySignals.client.polymarket.dto.UserTradeDto;
@@ -171,15 +170,60 @@ public class DataApiClient {
         );
     }
 
-    public List<UserTradeDto> getUserTrades(String userAddress, int limit, int offset) {
+//    public List<UserTradeDto> getUserTrades(String userAddress, int limit, Instant afterTimestamp) {
+//        if (userAddress == null || userAddress.isBlank()) {
+//            throw new IllegalArgumentException("userAddress must not be blank");
+//        }
+//        Objects.requireNonNull(afterTimestamp, "afterTimestamp must not be null");
+//        if (limit <= 0 || limit > 10000) {
+//            throw new IllegalArgumentException("limit must be between 1 and 10000");
+//        }
+//
+//        return polymarketRetryTemplate.execute(context ->
+//                dataApiWebClient.get()
+//                        .uri(uriBuilder -> uriBuilder
+//                                .path(TRADES_ENDPOINT)
+//                                .queryParam("user", userAddress)
+//                                .queryParam("limit", limit)
+//                                .queryParam("offset", afterTimestamp.getEpochSecond())
+//                                .queryParam("takerOnly", true)
+//                                .build())
+//                        .retrieve()
+//                        .onStatus(this::isRetryableStatus, response ->
+//                                response.createException().map(ex -> (Throwable) ex))
+//                        .onStatus(HttpStatusCode::isError, response -> response.bodyToMono(String.class)
+//                                .defaultIfEmpty("")
+//                                .map(body -> PolymarketApiErrorHandler.buildException(
+//                                        response.statusCode().value(),
+//                                        body,
+//                                        TRADES_ENDPOINT,
+//                                        response.headers().asHttpHeaders()
+//                                )))
+//                        .bodyToFlux(UserTradeDto.class)
+//                        .collectList()
+//                        .onErrorMap(WebClientRequestException.class,
+//                                ex -> PolymarketApiErrorHandler.fromTransportError(ex, TRADES_ENDPOINT))
+//                        .block()
+//        );
+//    }
+//
+//    public List<UserTradeDto> getUserTradesSince(String userAddress, Instant sinceTimestamp, int maxResults) {
+//        Objects.requireNonNull(sinceTimestamp, "sinceTimestamp must not be null");
+//        if (maxResults <= 0) {
+//            throw new IllegalArgumentException("maxResults must be > 0");
+//        }
+//        int limit = Math.min(maxResults, 200);
+//        List<UserTradeDto> trades = getUserTrades(userAddress, limit, sinceTimestamp);
+//        return trades == null ? List.of() : trades;
+//    }
+
+    public List<UserTradeDto> getUserTrades(String userAddress, int limit, Instant afterTimestamp) {
         if (userAddress == null || userAddress.isBlank()) {
             throw new IllegalArgumentException("userAddress must not be blank");
         }
+        Objects.requireNonNull(afterTimestamp, "afterTimestamp must not be null");
         if (limit <= 0 || limit > 10000) {
             throw new IllegalArgumentException("limit must be between 1 and 10000");
-        }
-        if (offset < 0) {
-            throw new IllegalArgumentException("offset must be >= 0");
         }
 
         return polymarketRetryTemplate.execute(context ->
@@ -188,7 +232,7 @@ public class DataApiClient {
                                 .path(TRADES_ENDPOINT)
                                 .queryParam("user", userAddress)
                                 .queryParam("limit", limit)
-                                .queryParam("offset", offset)
+                                .queryParam("after_timestamp", afterTimestamp.getEpochSecond())
                                 .queryParam("takerOnly", true)
                                 .build())
                         .retrieve()
@@ -215,9 +259,10 @@ public class DataApiClient {
         if (maxResults <= 0) {
             throw new IllegalArgumentException("maxResults must be > 0");
         }
-        int pageSize = Math.min(maxResults, 200);
-        List<UserTradeDto> all = getAllUserTradesSince(userAddress, sinceTimestamp, pageSize);
-        return all.size() <= maxResults ? all : all.subList(0, maxResults);
+
+        int limit = Math.min(maxResults, 200);
+        List<UserTradeDto> trades = getUserTrades(userAddress, limit, sinceTimestamp);
+        return trades == null ? List.of() : trades;
     }
 
     public List<UserTradeDto> getAllUserTradesSince(String userAddress, Instant afterTimestamp, int pageSize) {
@@ -231,7 +276,7 @@ public class DataApiClient {
         boolean reachedOlderTrades = false;
 
         while (true) {
-            List<UserTradeDto> batch = getUserTrades(userAddress, pageSize, offset);
+            List<UserTradeDto> batch = getUserTrades(userAddress, pageSize, afterTimestamp);
             if (batch == null || batch.isEmpty()) {
                 break;
             }
