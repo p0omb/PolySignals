@@ -58,6 +58,7 @@ app:
     cooldown: ${SIGNAL_COOLDOWN:24h}
     window: ${SIGNAL_WINDOW:6h}
     backup-period: ${SIGNAL_BACKUP_PERIOD:7d}
+    retry-unsent-enabled: ${SIGNAL_RETRY_UNSENT_ENABLED:false}
   polymarket:
     retry:
       max-attempts: ${POLYMARKET_RETRY_MAX_ATTEMPTS:3}
