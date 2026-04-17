@@ -55,7 +55,7 @@ app:
   whales:
     top-limit: ${WHALES_TOP_LIMIT:100}
   signal:
-    cooldown: ${SIGNAL_COOLDOWN:12h}
+    cooldown: ${SIGNAL_COOLDOWN:24h}
     window: ${SIGNAL_WINDOW:6h}
     backup-period: ${SIGNAL_BACKUP_PERIOD:7d}
   polymarket:
