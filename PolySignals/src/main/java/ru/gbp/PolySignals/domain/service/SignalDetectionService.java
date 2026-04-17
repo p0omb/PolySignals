@@ -110,12 +110,15 @@ public class SignalDetectionService {
         signal.setFirstBetAt(stats.getFirstBetAt());
         signal.setLastBetAt(stats.getLastBetAt());
         signal.setReason(buildReason(stats));
-        signal.setCreatedAt(to);
+
+        Instant signalTime = Objects.requireNonNullElse(stats.getLastBetAt(), to);
+        signal.setCreatedAt(signalTime);
+
         signal.setTelegramSent(false);
         signal.setPeriodHours(Math.toIntExact(signalWindow.toHours()));
         signal.setWhaleLabels(whaleLabels);
 
-        String signalKey = buildSignalKey(normalizedMarketId, normalizedOutcome, to, cooldown);
+        String signalKey = buildSignalKey(normalizedMarketId, normalizedOutcome, signalTime, cooldown);
         signal.setSignalKey(signalKey);
 
         log.debug(
