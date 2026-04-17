@@ -160,7 +160,7 @@ class DataApiClientTest extends AbstractPostgresIntegrationTest {
         wiremock.stubFor(get(urlPathEqualTo("/trades"))
                 .withQueryParam("user", equalTo("0x56687bf447db6ffa42ffe2204a05edaa20f55839"))
                 .withQueryParam("limit", equalTo("200"))
-                .withQueryParam("offset", equalTo("0"))
+                .withQueryParam("after_timestamp", matching("\\d+"))
                 .withQueryParam("takerOnly", equalTo("true"))
                 .inScenario("server-error")
                 .whenScenarioStateIs(STARTED)
@@ -170,19 +170,19 @@ class DataApiClientTest extends AbstractPostgresIntegrationTest {
         wiremock.stubFor(get(urlPathEqualTo("/trades"))
                 .withQueryParam("user", equalTo("0x56687bf447db6ffa42ffe2204a05edaa20f55839"))
                 .withQueryParam("limit", equalTo("200"))
-                .withQueryParam("offset", equalTo("0"))
+                .withQueryParam("after_timestamp", matching("\\d+"))
                 .withQueryParam("takerOnly", equalTo("true"))
                 .inScenario("server-error")
                 .whenScenarioStateIs("second")
                 .willReturn(okJson("[]")));
 
-        List<UserTradeDto> trades = dataApiClient.getUserTrades("0x56687bf447db6ffa42ffe2204a05edaa20f55839", 200, 0);
+        List<UserTradeDto> trades = dataApiClient.getUserTrades("0x56687bf447db6ffa42ffe2204a05edaa20f55839", 200, Instant.now().minus(Duration.ofDays(1)));
 
         assertThat(trades).isNotNull();
         wiremock.verify(2, getRequestedFor(urlPathEqualTo("/trades"))
                 .withQueryParam("user", equalTo("0x56687bf447db6ffa42ffe2204a05edaa20f55839"))
                 .withQueryParam("limit", equalTo("200"))
-                .withQueryParam("offset", equalTo("0"))
+                .withQueryParam("after_timestamp", matching("\\d+"))
                 .withQueryParam("takerOnly", equalTo("true")));
     }
 
@@ -191,7 +191,7 @@ class DataApiClientTest extends AbstractPostgresIntegrationTest {
         wiremock.stubFor(get(urlPathEqualTo("/trades"))
                 .withQueryParam("user", equalTo("0x9e2b3a7d4c8f1e6a9b2c3d4e5f6a7b8c9d0e1f2a"))
                 .withQueryParam("limit", equalTo("200"))
-                .withQueryParam("offset", equalTo("0"))
+                .withQueryParam("after_timestamp", matching("\\d+"))
                 .withQueryParam("takerOnly", equalTo("true"))
                 .inScenario("rate-limit")
                 .whenScenarioStateIs(STARTED)
@@ -201,19 +201,19 @@ class DataApiClientTest extends AbstractPostgresIntegrationTest {
         wiremock.stubFor(get(urlPathEqualTo("/trades"))
                 .withQueryParam("user", equalTo("0x9e2b3a7d4c8f1e6a9b2c3d4e5f6a7b8c9d0e1f2a"))
                 .withQueryParam("limit", equalTo("200"))
-                .withQueryParam("offset", equalTo("0"))
+                .withQueryParam("after_timestamp", matching("\\d+"))
                 .withQueryParam("takerOnly", equalTo("true"))
                 .inScenario("rate-limit")
                 .whenScenarioStateIs("second")
                 .willReturn(okJson("[]")));
 
-        List<UserTradeDto> trades = dataApiClient.getUserTrades("0x9e2b3a7d4c8f1e6a9b2c3d4e5f6a7b8c9d0e1f2a", 200, 0);
+        List<UserTradeDto> trades = dataApiClient.getUserTrades("0x9e2b3a7d4c8f1e6a9b2c3d4e5f6a7b8c9d0e1f2a", 200, Instant.now().minus(Duration.ofDays(1)));
 
         assertThat(trades).isNotNull();
         wiremock.verify(2, getRequestedFor(urlPathEqualTo("/trades"))
                 .withQueryParam("user", equalTo("0x9e2b3a7d4c8f1e6a9b2c3d4e5f6a7b8c9d0e1f2a"))
                 .withQueryParam("limit", equalTo("200"))
-                .withQueryParam("offset", equalTo("0"))
+                .withQueryParam("after_timestamp", matching("\\d+"))
                 .withQueryParam("takerOnly", equalTo("true")));
     }
 
