@@ -56,6 +56,21 @@ public interface BetRepository extends JpaRepository<Bet, Long> {
             @Param("to") Instant to
     );
 
+    @Query("""
+            SELECT DISTINCT w.userName
+            FROM Bet b
+            JOIN b.whale w
+            WHERE b.marketId = :marketId
+              AND b.outcome = :outcome
+              AND b.transactionTime BETWEEN :from AND :to
+            """)
+    List<String> findDistinctWhaleNamesByMarketOutcomeAndTimeRange(
+            @Param("marketId") String marketId,
+            @Param("outcome") String outcome,
+            @Param("from") Instant from,
+            @Param("to") Instant to
+    );
+
 //    @Query("""
 //            SELECT COUNT(s) > 0
 //            FROM Signal s
