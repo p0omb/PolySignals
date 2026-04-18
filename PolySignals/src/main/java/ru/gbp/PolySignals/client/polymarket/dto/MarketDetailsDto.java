@@ -21,6 +21,7 @@ public class MarketDetailsDto {
     private String marketId;
 
     @JsonProperty("question")
+    @JsonAlias({"marketQuestion", "market_question"})
     private String question;
 
     @JsonProperty("slug")

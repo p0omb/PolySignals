@@ -17,7 +17,7 @@ public class SignalDetectionBackupScheduler {
     private final SignalDetectionService signalDetectionService;
 
     @Async("signalDetectionSchedulerExecutor")
-    @Scheduled(fixedDelay = 300_000)
+    @Scheduled(cron = "0 0 3 * * *")
     public void run() {
         try {
             signalDetectionService.detectAndSendSignals(Duration.ofHours(1), Duration.ofHours(6));

@@ -99,7 +99,7 @@ public class SignalNotificationRetryService {
                 fresh.getTotalAmount(),
                 fresh.getFirstBetAt(),
                 fresh.getLastBetAt(),
-                List.of(),
+                fresh.getWhaleLabels(),
                 fresh.getReason()
         );
 

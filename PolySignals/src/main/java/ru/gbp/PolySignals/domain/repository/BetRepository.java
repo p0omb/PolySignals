@@ -57,7 +57,7 @@ public interface BetRepository extends JpaRepository<Bet, Long> {
     );
 
     @Query("""
-            SELECT DISTINCT w.userName
+            SELECT DISTINCT COALESCE(w.userName, w.userId)
             FROM Bet b
             JOIN b.whale w
             WHERE b.marketId = :marketId

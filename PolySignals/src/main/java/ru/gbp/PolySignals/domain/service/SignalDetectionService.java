@@ -252,6 +252,9 @@ public class SignalDetectionService {
         if (market == null) {
             return "https://polymarket.com/event/" + fallbackMarketId;
         }
+        if (hasText(market.getSlug())) {
+            return "https://polymarket.com/event/" + market.getSlug().trim();
+        }
         if (hasText(market.getUrl())) {
             String url = market.getUrl().trim();
             if (url.startsWith("http://") || url.startsWith("https://")) {
@@ -259,9 +262,7 @@ public class SignalDetectionService {
             }
             return "https://polymarket.com/event/" + url;
         }
-        if (hasText(market.getSlug())) {
-            return "https://polymarket.com/event/" + market.getSlug().trim();
-        }
+
         if (hasText(market.getMarketId())) {
             return "https://polymarket.com/event/" + market.getMarketId().trim();
         }
