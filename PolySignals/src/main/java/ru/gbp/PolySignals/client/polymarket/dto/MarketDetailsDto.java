@@ -40,9 +40,9 @@ public class MarketDetailsDto {
     @JsonAlias({"endDate", "end_date"})
     private Instant endDate;
 
-    @JsonAlias({"outcomes", "outcomeNames"})
-    private List<String> outcomes;
-
-    @JsonAlias({"outcomePrices", "prices"})
-    private List<String> outcomePrices;
+//    @JsonAlias({"outcomes", "outcomeNames"})
+//    private List<String> outcomes;
+//
+//    @JsonAlias({"outcomePrices", "prices"})
+//    private List<String> outcomePrices;
 }
