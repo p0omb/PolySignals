@@ -5,6 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import ru.gbp.PolySignals.client.polymarket.GammaApiClient;
 import ru.gbp.PolySignals.client.polymarket.dto.MarketDetailsDto;
 import ru.gbp.PolySignals.domain.entity.Bet;
@@ -37,6 +39,7 @@ public class SignalDetectionService {
     private final ApplicationEventPublisher eventPublisher;
     private final GammaApiClient gammaApiClient;
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void checkSignalForNewBet(Bet newBet, Duration signalWindow, Duration cooldown) {
         Objects.requireNonNull(newBet, "newBet must not be null");
         validatePositiveDuration("signalWindow", signalWindow);

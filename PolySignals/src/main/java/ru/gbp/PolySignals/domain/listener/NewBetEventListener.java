@@ -1,6 +1,7 @@
 package ru.gbp.PolySignals.domain.listener;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -19,6 +20,7 @@ public class NewBetEventListener {
 
     private final SignalDetectionService signalDetectionService;
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onNewBet(NewBetEvent event) {
         if (event == null || event.bet() == null) {
