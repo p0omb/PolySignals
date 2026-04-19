@@ -20,7 +20,7 @@ public class NewBetEventListener {
 
     private final SignalDetectionService signalDetectionService;
 
-    @Async
+//    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onNewBet(NewBetEvent event) {
         if (event == null || event.bet() == null) {
