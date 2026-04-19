@@ -77,7 +77,7 @@ public class SignalNotificationRetryService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendOnce(Long signalId) {
-        log.info("sendOnce called, signalId={}", signalId);
+        log.info("sendOnce called for signalId={}", signalId);
 
         Signal fresh = signalRepository.findById(signalId).orElse(null);
         if (fresh == null) {
@@ -103,6 +103,7 @@ public class SignalNotificationRetryService {
                 fresh.getReason()
         );
 
+        log.info("Sending notification for signalId={}", signalId);
         notificationService.sendSignalNotification(payload);
 
         int updated;

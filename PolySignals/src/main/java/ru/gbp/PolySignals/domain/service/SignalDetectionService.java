@@ -45,9 +45,13 @@ public class SignalDetectionService {
         validatePositiveDuration("signalWindow", signalWindow);
         validatePositiveDuration("cooldown", cooldown);
 
+        log.info("checkSignalForNewBet started for bet id={}, market={}, outcome={}",
+                newBet.getId(), newBet.getMarketId(), newBet.getOutcome());
+
         Instant to = resolveSignalTime(newBet);
         Instant from = to.minus(signalWindow);
 
+        log.info("Calling processMarketOutcome for market={}, outcome={}", newBet.getMarketId(), newBet.getOutcome());
         processMarketOutcome(newBet.getMarketId(), newBet.getOutcome(), from, to, signalWindow, cooldown);
     }
 
@@ -76,6 +80,8 @@ public class SignalDetectionService {
             Duration signalWindow,
             Duration cooldown
     ) {
+        log.info("processMarketOutcome: marketId={}, outcome={}, from={}, to={}", marketId, outcome, from, to);
+
         validateMarketAndOutcome(marketId, outcome);
         validatePositiveDuration("signalWindow", signalWindow);
         validatePositiveDuration("cooldown", cooldown);
@@ -90,6 +96,12 @@ public class SignalDetectionService {
                 from,
                 to
         );
+
+        if (stats != null) {
+            log.info("Stats: whalesCount={}, totalAmount={}", stats.getWhalesCount(), stats.getTotalAmount());
+        } else {
+            log.info("Stats: null for marketId={}, outcome={}", marketId, outcome);
+        }
 
         if (stats == null || stats.getWhalesCount() == null || stats.getWhalesCount() < MIN_WHALES) {
             return;
@@ -131,8 +143,10 @@ public class SignalDetectionService {
 
         log.info("Processing market outcome: marketId={}, outcome={}, from={}, to={}", marketId, outcome, from, to);
         try {
+            log.info("Calling Gamma API for marketId={}", normalizedMarketId);
             MarketDetailsDto market = gammaApiClient.getMarket(normalizedMarketId);
-            log.info("Gamma API returned market: {}", market);
+            log.info("Gamma API returned market: {}", market != null ? market.getQuestion() : "null");
+
             if (market != null) {
                 if (hasText(market.getQuestion())) {
                     signal.setMarketQuestion(market.getQuestion().trim());
@@ -142,13 +156,13 @@ public class SignalDetectionService {
                 signal.setMarketUrl("https://polymarket.com/event/" + normalizedMarketId);
             }
         } catch (Exception e) {
-
             signal.setMarketUrl("https://polymarket.com/event/" + normalizedMarketId);
-            log.warn("Failed to fetch market details for {}", normalizedMarketId, e);
+            log.error("Gamma API error for marketId={}", normalizedMarketId, e);
         }
 
         Signal savedSignal;
         try {
+            log.info("Saving signal with key={}, marketId={}, outcome={}", signalKey, normalizedMarketId, normalizedOutcome);
             savedSignal = signalRepository.saveAndFlush(signal);
         } catch (DataIntegrityViolationException ex) {
             log.error("DataIntegrityViolationException for signalKey={}", signal.getSignalKey(), ex);

@@ -57,19 +57,33 @@ public class BetService {
                 continue;
             }
 
-            Bet bet = new Bet();
-            bet.setWhale(whale);
-            bet.setMarketId(marketId);
-            bet.setOutcome(normalizedOutcome);
-            bet.setAmount(t.getSize());
-            bet.setTransactionHash(t.getTransactionHash());
-            bet.setTransactionTime(timestamp);
-            bet.setCreatedAt(Instant.now());
-            bet.setUniqueKey(uk);
+            try {
+                Bet bet = new Bet();
+                bet.setWhale(whale);
+                bet.setMarketId(marketId);
+                bet.setOutcome(normalizedOutcome);
+                bet.setAmount(t.getSize());
+                bet.setTransactionHash(t.getTransactionHash());
+                bet.setTransactionTime(timestamp);
+                bet.setCreatedAt(Instant.now());
+                bet.setUniqueKey(uk);
 
-            Bet savedBet = betRepository.save(bet);
-            newBets.add(savedBet);
-            eventPublisher.publishEvent(new NewBetEvent(savedBet));
+                Bet savedBet = betRepository.save(bet);
+                newBets.add(savedBet);
+
+                log.info("Bet saved, id={}, market={}, outcome={}, whaleId={}",
+                        savedBet.getId(),
+                        savedBet.getMarketId(),
+                        savedBet.getOutcome(),
+                        savedBet.getWhale() != null ? savedBet.getWhale().getId() : null);
+                log.info("Publishing NewBetEvent for bet id={}", savedBet.getId());
+
+                eventPublisher.publishEvent(new NewBetEvent(savedBet));
+            } catch (Exception ex) {
+                log.error("Failed to save/publish bet for userId={}, marketId={}, outcome={}, timestamp={}",
+                        userId, marketId, normalizedOutcome, timestamp, ex);
+                throw ex;
+            }
         }
 
         return newBets;

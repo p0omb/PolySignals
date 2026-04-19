@@ -1,6 +1,7 @@
 package ru.gbp.PolySignals.domain.listener;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -11,6 +12,7 @@ import ru.gbp.PolySignals.domain.service.SignalDetectionService;
 
 import java.time.Duration;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class NewBetEventListener {
@@ -28,6 +30,14 @@ public class NewBetEventListener {
         }
 
         Bet newBet = event.bet();
-        signalDetectionService.checkSignalForNewBet(newBet, SIGNAL_WINDOW, SIGNAL_COOLDOWN);
+        log.info("NewBetEventListener received event for bet id={}", newBet.getId());
+
+        try {
+            signalDetectionService.checkSignalForNewBet(newBet, SIGNAL_WINDOW, SIGNAL_COOLDOWN);
+            log.info("checkSignalForNewBet called for bet id={}", newBet.getId());
+        } catch (Exception ex) {
+            log.error("NewBetEventListener failed for bet id={}", newBet.getId(), ex);
+            throw ex;
+        }
     }
 }
