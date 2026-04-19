@@ -60,7 +60,7 @@ public class Signal {
     @Column(name = "reason", length = 512)
     private String reason;
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "signal_whale_labels", joinColumns = @JoinColumn(name = "signal_id"))
     @Column(name = "label")
     private List<String> whaleLabels = new ArrayList<>();
