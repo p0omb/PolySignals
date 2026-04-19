@@ -39,7 +39,7 @@ public class SignalDetectionService {
     private final ApplicationEventPublisher eventPublisher;
     private final GammaApiClient gammaApiClient;
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, noRollbackFor = DataIntegrityViolationException.class)
     public void checkSignalForNewBet(Bet newBet, Duration signalWindow, Duration cooldown) {
         Objects.requireNonNull(newBet, "newBet must not be null");
         validatePositiveDuration("signalWindow", signalWindow);
@@ -71,6 +71,7 @@ public class SignalDetectionService {
             processMarketOutcome(candidate.getMarketId(), candidate.getOutcome(), from, to, period, cooldown);
         }
     }
+
 
     private void processMarketOutcome(
             String marketId,
