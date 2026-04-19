@@ -129,8 +129,10 @@ public class SignalDetectionService {
                 signalKey, normalizedMarketId, normalizedOutcome, from, to, cooldown
         );
 
+        log.info("Processing market outcome: marketId={}, outcome={}, from={}, to={}", marketId, outcome, from, to);
         try {
             MarketDetailsDto market = gammaApiClient.getMarket(normalizedMarketId);
+            log.info("Gamma API returned market: {}", market);
             if (market != null) {
                 if (hasText(market.getQuestion())) {
                     signal.setMarketQuestion(market.getQuestion().trim());
@@ -140,6 +142,7 @@ public class SignalDetectionService {
                 signal.setMarketUrl("https://polymarket.com/event/" + normalizedMarketId);
             }
         } catch (Exception e) {
+
             signal.setMarketUrl("https://polymarket.com/event/" + normalizedMarketId);
             log.warn("Failed to fetch market details for {}", normalizedMarketId, e);
         }
@@ -148,6 +151,7 @@ public class SignalDetectionService {
         try {
             savedSignal = signalRepository.saveAndFlush(signal);
         } catch (DataIntegrityViolationException ex) {
+            log.error("DataIntegrityViolationException for signalKey={}", signal.getSignalKey(), ex);
             if (isDuplicateSignalKeyViolation(ex)) {
                 log.debug("Duplicate signal skipped by unique signal_key: {}", signal.getSignalKey());
                 return;
