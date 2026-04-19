@@ -36,43 +36,40 @@ public class GammaApiClient {
         final String endpoint = MARKETS_ENDPOINT + "?condition_ids[]=" + marketId;
 
         return polymarketRetryTemplate.execute(context -> {
-            try {
-                List<MarketDetailsDto> markets = gammaApiWebClient.get()
-                        .uri(uriBuilder -> uriBuilder
-                                .path(MARKETS_ENDPOINT)
-                                .queryParam("condition_ids[]", marketId)
-                                .build())
-                        .retrieve()
-                        .onStatus(this::isRetryableStatus, response -> response.createException().map(ex -> (Throwable) ex))
-                        .onStatus(HttpStatusCode::isError, response -> response.bodyToMono(String.class)
-                                .defaultIfEmpty("")
-                                .map(body -> PolymarketApiErrorHandler.buildException(
-                                        response.statusCode().value(),
-                                        body,
-                                        endpoint,
-                                        response.headers().asHttpHeaders()
-                                )))
-                        .bodyToMono(new ParameterizedTypeReference<List<MarketDetailsDto>>() {
-                        })
-                        .doOnError(e -> log.error("Gamma API error for marketId={}: {}", marketId, e.getMessage(), e))
-                        .block();
 
-                if (markets == null || markets.isEmpty()) {
-                    log.warn("Gamma API returned empty or null response for marketId={}", marketId);
-                    return null;
-                }
+            List<MarketDetailsDto> markets = gammaApiWebClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path(MARKETS_ENDPOINT)
+                            .queryParam("condition_ids[]", marketId)
+                            .build())
+                    .retrieve()
+                    .onStatus(this::isRetryableStatus, response -> response.createException().map(ex -> (Throwable) ex))
+                    .onStatus(HttpStatusCode::isError, response -> response.bodyToMono(String.class)
+                            .defaultIfEmpty("")
+                            .map(body -> PolymarketApiErrorHandler.buildException(
+                                    response.statusCode().value(),
+                                    body,
+                                    endpoint,
+                                    response.headers().asHttpHeaders()
+                            )))
+                    .bodyToMono(new ParameterizedTypeReference<List<MarketDetailsDto>>() {
+                    })
+                    .doOnError(e -> log.error("Gamma API error for marketId={}: {}", marketId, e.getMessage(), e))
+                    .block();
 
-                MarketDetailsDto dto = markets.get(0);
-                if (dto.getMarketId() == null || dto.getMarketId().isBlank()) {
-                    log.debug("MarketId missing in response, setting fallback marketId={}", marketId);
-                    dto.setMarketId(marketId);
-                }
-                log.info("Gamma API success for marketId={}, question={}, slug={}", marketId, dto.getQuestion(), dto.getSlug());
-                return dto;
-            } catch (Exception e) {
-                log.error("Unexpected error in GammaApiClient.getMarket for marketId={}", marketId, e);
+            if (markets == null || markets.isEmpty()) {
+                log.warn("Gamma API returned empty or null response for marketId={}", marketId);
                 return null;
             }
+
+            MarketDetailsDto dto = markets.get(0);
+            if (dto.getMarketId() == null || dto.getMarketId().isBlank()) {
+                log.debug("MarketId missing in response, setting fallback marketId={}", marketId);
+                dto.setMarketId(marketId);
+            }
+            log.info("Gamma API success for marketId={}, question={}, slug={}", marketId, dto.getQuestion(), dto.getSlug());
+            return dto;
+
         });
     }
 
