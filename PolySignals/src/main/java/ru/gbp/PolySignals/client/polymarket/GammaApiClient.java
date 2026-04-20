@@ -23,7 +23,7 @@ public class GammaApiClient {
     private final WebClient gammaApiWebClient;
     private final RetryTemplate polymarketRetryTemplate;
 
-    @Cacheable(cacheNames = "markets", key = "#marketId")
+//    @Cacheable(cacheNames = "markets", key = "#marketId")
     public MarketDetailsDto getMarket(String marketId) {
 
         log.info("GammaApiClient.getMarket called for marketId={}", marketId);
