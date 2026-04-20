@@ -2,7 +2,11 @@ package ru.gbp.PolySignals.config.properties;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+
+import java.math.BigDecimal;
 import java.time.Duration;
+
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -37,5 +41,8 @@ public class SignalProperties {
     public long getBackupPeriodSeconds() {
         return backupPeriod == null ? 0 : backupPeriod.getSeconds();
     }
+
+    @PositiveOrZero
+    private BigDecimal minTotalAmount = BigDecimal.ZERO;
 }
 

@@ -59,6 +59,7 @@ app:
     window: ${SIGNAL_WINDOW:6h}
     backup-period: ${SIGNAL_BACKUP_PERIOD:7d}
     retry-unsent-enabled: ${SIGNAL_RETRY_UNSENT_ENABLED:false}
+    min-total-amount: ${SIGNAL_MIN_TOTAL_AMOUNT:1000}
   polymarket:
     retry:
       max-attempts: ${POLYMARKET_RETRY_MAX_ATTEMPTS:3}

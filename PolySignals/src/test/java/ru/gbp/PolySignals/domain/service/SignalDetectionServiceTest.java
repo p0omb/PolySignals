@@ -21,6 +21,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import ru.gbp.PolySignals.client.polymarket.GammaApiClient;
+import ru.gbp.PolySignals.config.properties.SignalProperties;
 import ru.gbp.PolySignals.domain.entity.Bet;
 import ru.gbp.PolySignals.domain.entity.Signal;
 import ru.gbp.PolySignals.domain.entity.Whale;
@@ -36,6 +37,8 @@ class SignalDetectionServiceTest {
     @Mock SignalRepository signalRepository;
     @Mock ApplicationEventPublisher eventPublisher;
     @Mock GammaApiClient gammaApiClient;
+    @Mock
+    private SignalProperties signalProperties;
 
     @InjectMocks SignalDetectionService signalDetectionService;
 
@@ -45,6 +48,7 @@ class SignalDetectionServiceTest {
         lenient().when(betRepository.findDistinctWhaleNamesByMarketOutcomeAndTimeRange(anyString(), anyString(), any(), any()))
                 .thenReturn(List.of("whale1", "whale2"));
         lenient().when(gammaApiClient.getMarket(anyString())).thenReturn(null);
+        lenient().when(signalProperties.getMinTotalAmount()).thenReturn(BigDecimal.ZERO);
     }
 
     @Test

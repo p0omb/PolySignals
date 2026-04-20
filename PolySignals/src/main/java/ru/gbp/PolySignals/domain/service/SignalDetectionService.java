@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import ru.gbp.PolySignals.client.polymarket.GammaApiClient;
 import ru.gbp.PolySignals.client.polymarket.dto.MarketDetailsDto;
+import ru.gbp.PolySignals.config.properties.SignalProperties;
 import ru.gbp.PolySignals.domain.entity.Bet;
 import ru.gbp.PolySignals.domain.entity.Signal;
 import ru.gbp.PolySignals.domain.event.SignalCreatedEvent;
@@ -38,6 +39,7 @@ public class SignalDetectionService {
     private final SignalRepository signalRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final GammaApiClient gammaApiClient;
+    private final SignalProperties signalProperties;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, noRollbackFor = DataIntegrityViolationException.class)
     public void checkSignalForNewBet(Bet newBet, Duration signalWindow, Duration cooldown) {
@@ -107,6 +109,12 @@ public class SignalDetectionService {
         }
 
         if (stats == null || stats.getWhalesCount() == null || stats.getWhalesCount() < MIN_WHALES) {
+            return;
+        }
+
+        if (signalProperties.getMinTotalAmount().compareTo(BigDecimal.ZERO) > 0
+                && stats.getTotalAmount().compareTo(signalProperties.getMinTotalAmount()) < 0) {
+            log.info("Signal ignored: totalAmount {} < minTotalAmount {}", stats.getTotalAmount(), signalProperties.getMinTotalAmount());
             return;
         }
 
