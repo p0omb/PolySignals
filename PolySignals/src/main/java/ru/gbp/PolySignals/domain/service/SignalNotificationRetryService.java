@@ -89,11 +89,13 @@ public class SignalNotificationRetryService {
             return;
         }
 
+        String marketUrl = fresh.getSlug() != null ? "https://polymarket.com/event/" + fresh.getSlug() : null;
+
         SignalNotificationPayload payload = new SignalNotificationPayload(
                 fresh.getId(),
                 fresh.getMarketId(),
                 fresh.getMarketQuestion(),
-                fresh.getMarketUrl(),
+                marketUrl,
                 fresh.getOutcome(),
                 fresh.getWhalesCount(),
                 fresh.getTotalAmount(),

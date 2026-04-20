@@ -41,4 +41,7 @@ public class Bet {
 
     @Column(name = "unique_key", nullable = false, unique = true, length = 256)
     private String uniqueKey;
+
+    @Transient
+    private String slug;
 }

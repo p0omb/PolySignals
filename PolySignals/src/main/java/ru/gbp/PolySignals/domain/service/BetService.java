@@ -67,6 +67,7 @@ public class BetService {
                 bet.setTransactionTime(timestamp);
                 bet.setCreatedAt(Instant.now());
                 bet.setUniqueKey(uk);
+                bet.setSlug(t.getSlug());
 
                 Bet savedBet = betRepository.save(bet);
                 newBets.add(savedBet);

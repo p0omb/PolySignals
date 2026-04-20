@@ -64,4 +64,7 @@ public class Signal {
     @CollectionTable(name = "signal_whale_labels", joinColumns = @JoinColumn(name = "signal_id"))
     @Column(name = "label")
     private List<String> whaleLabels = new ArrayList<>();
+
+    @Column(name = "slug")
+    private String slug;
 }

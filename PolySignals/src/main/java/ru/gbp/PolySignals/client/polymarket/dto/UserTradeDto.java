@@ -45,6 +45,9 @@ public class UserTradeDto {
         }
     }
 
+    @JsonAlias({"slug"})
+    private String slug;
+
     @JsonSetter("timestamp")
     public void setTimestampRaw(Object raw) {
         this.timestamp = parseTimestamp(raw);
