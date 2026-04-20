@@ -147,22 +147,28 @@ public class SignalDetectionService {
         );
 
         log.info("Processing market outcome: marketId={}, outcome={}, from={}, to={}", marketId, outcome, from, to);
-        try {
-            log.info("Calling Gamma API for marketId={}", normalizedMarketId);
-            MarketDetailsDto market = gammaApiClient.getMarket(normalizedMarketId);
-            log.info("Gamma API returned market: {}", market != null ? market.getQuestion() : "null");
+//        try {
+//            log.info("Calling Gamma API for marketId={}", normalizedMarketId);
+//            MarketDetailsDto market = gammaApiClient.getMarket(normalizedMarketId);
+//            log.info("Gamma API returned market: {}", market != null ? market.getQuestion() : "null");
+//
+//            if (market != null) {
+//                if (hasText(market.getQuestion())) {
+//                    signal.setMarketQuestion(market.getQuestion().trim());
+//                }
+//                signal.setMarketUrl(resolveMarketUrl(market, normalizedMarketId));
+//            } else {
+//                signal.setMarketUrl("https://polymarket.com/event/" + normalizedMarketId);
+//            }
+//        } catch (Exception e) {
+//            signal.setMarketUrl("https://polymarket.com/event/" + normalizedMarketId);
+//            log.error("Gamma API error for marketId={}", normalizedMarketId, e);
+//        }
 
-            if (market != null) {
-                if (hasText(market.getQuestion())) {
-                    signal.setMarketQuestion(market.getQuestion().trim());
-                }
-                signal.setMarketUrl(resolveMarketUrl(market, normalizedMarketId));
-            } else {
-                signal.setMarketUrl("https://polymarket.com/event/" + normalizedMarketId);
-            }
-        } catch (Exception e) {
-            signal.setMarketUrl("https://polymarket.com/event/" + normalizedMarketId);
-            log.error("Gamma API error for marketId={}", normalizedMarketId, e);
+        if (slug != null && !slug.isBlank()) {
+            signal.setMarketUrl("https://polymarket.com/event/" + slug);
+        } else {
+            signal.setMarketUrl("https://polymarket.com/event/" + normalizedMarketId); // fallback
         }
 
         Signal savedSignal;
