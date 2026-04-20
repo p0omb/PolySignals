@@ -31,6 +31,12 @@ public class UserTradeDto {
 
     private Instant timestamp;
 
+    @JsonAlias({"title"})
+    private String title;
+
+    @JsonAlias({"slug"})
+    private String slug;
+
     @JsonSetter("outcome")
     public void setOutcomeRaw(String outcome) {
         this.outcome = normalizeOutcome(outcome);
@@ -45,8 +51,6 @@ public class UserTradeDto {
         }
     }
 
-    @JsonAlias({"slug"})
-    private String slug;
 
     @JsonSetter("timestamp")
     public void setTimestampRaw(Object raw) {

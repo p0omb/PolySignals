@@ -52,7 +52,7 @@ public class SignalDetectionService {
         Instant from = to.minus(signalWindow);
 
         log.info("Calling processMarketOutcome for market={}, outcome={}", newBet.getMarketId(), newBet.getOutcome());
-        processMarketOutcome(newBet.getMarketId(), newBet.getOutcome(), from, to, signalWindow, cooldown, newBet.getSlug());
+        processMarketOutcome(newBet.getMarketId(), newBet.getOutcome(), from, to, signalWindow, cooldown, newBet.getSlug(), newBet.getTitle());
     }
 
     public void detectAndSendSignals(Duration period, Duration cooldown) {
@@ -68,7 +68,7 @@ public class SignalDetectionService {
 
         List<SignalCandidateProjection> candidates = betRepository.findSignalCandidates(from, to, MIN_WHALES);
         for (SignalCandidateProjection candidate : candidates) {
-            processMarketOutcome(candidate.getMarketId(), candidate.getOutcome(), from, to, period, cooldown, null);
+            processMarketOutcome(candidate.getMarketId(), candidate.getOutcome(), from, to, period, cooldown, null, null);
         }
     }
 
@@ -80,7 +80,8 @@ public class SignalDetectionService {
             Instant to,
             Duration signalWindow,
             Duration cooldown,
-            String slug
+            String slug,
+            String title
     ) {
         log.info("processMarketOutcome: marketId={}, outcome={}, from={}, to={}", marketId, outcome, from, to);
 
@@ -138,6 +139,7 @@ public class SignalDetectionService {
         String signalKey = buildSignalKey(normalizedMarketId, normalizedOutcome, signalTime, cooldown);
         signal.setSignalKey(signalKey);
         signal.setSlug(slug);
+        signal.setMarketQuestion(title);
 
         log.debug(
                 "Signal key built: key={}, marketId={}, outcome={}, from={}, to={}, cooldown={}",

@@ -44,4 +44,7 @@ public class Bet {
 
     @Transient
     private String slug;
+
+    @Transient
+    private String title;
 }
