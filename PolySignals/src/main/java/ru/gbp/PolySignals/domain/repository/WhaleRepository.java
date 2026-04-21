@@ -34,4 +34,7 @@ public interface WhaleRepository extends JpaRepository<Whale, Long> {
     default List<Whale> findTopWhales(int limit) {
         return findByOrderByVolumeDesc(PageRequest.of(0, limit));
     }
+
+    @Query("SELECT w FROM Whale w WHERE w.ignored = false")
+    List<Whale> findActiveWhales();
 }

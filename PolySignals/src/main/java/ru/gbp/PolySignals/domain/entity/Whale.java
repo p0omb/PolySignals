@@ -30,4 +30,7 @@ public class Whale {
 
     @Column(name = "last_seen_at", nullable = false)
     private Instant lastSeenAt;
+
+    @Column(name = "ignored")
+    private Boolean ignored = false;
 }

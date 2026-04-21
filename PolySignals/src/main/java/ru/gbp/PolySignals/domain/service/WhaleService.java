@@ -23,15 +23,41 @@ public class WhaleService {
         Instant now = Instant.now();
         int updated = 0;
 
+
+        if (leaderboard == null || leaderboard.isEmpty()) {
+            return 0;
+        }
+
         for (LeaderboardUserDto dto : leaderboard) {
-            Whale whale = whaleRepository.findByUserId(dto.getUserId()).orElseGet(Whale::new);
-            whale.setUserId(dto.getUserId());
-            whale.setUserName(dto.getUserName());
-            whale.setVolume(dto.getVolume());
-            whale.setProfit(dto.getProfit());
-            whale.setLastSeenAt(now);
-            whaleRepository.save(whale);
-            updated++;
+            if (dto == null || dto.getUserId() == null || dto.getUserId().isBlank()) {
+                continue;
+            }
+
+            Whale whale = whaleRepository.findByUserId(dto.getUserId()).orElse(null);
+
+            if (whale != null) {
+                // Если кит помечен как игнорируемый – пропускаем обновление
+                if (Boolean.TRUE.equals(whale.getIgnored())) {
+                    continue;
+                }
+                whale.setUserName(dto.getUserName());
+                whale.setVolume(dto.getVolume());
+                whale.setProfit(dto.getProfit());
+                whale.setLastSeenAt(now);
+                whaleRepository.save(whale);
+                updated++;
+            } else {
+                // Новый кит – добавляем с ignored = false
+                whale = new Whale();
+                whale.setUserId(dto.getUserId());
+                whale.setUserName(dto.getUserName());
+                whale.setVolume(dto.getVolume());
+                whale.setProfit(dto.getProfit());
+                whale.setLastSeenAt(now);
+                whale.setIgnored(false);
+                whaleRepository.save(whale);
+                updated++;
+            }
         }
         return updated;
     }

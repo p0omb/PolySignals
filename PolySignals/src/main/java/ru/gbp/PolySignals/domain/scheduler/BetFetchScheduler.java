@@ -40,7 +40,7 @@ public class BetFetchScheduler {
     @Async("betFetchSchedulerExecutor")
     @Scheduled(fixedDelay = 180_000)
     public void run() {
-        List<Whale> whales = whaleRepository.findTopWhales(TOP_WHALES);
+        List<Whale> whales = whaleRepository.findActiveWhales();
 
         int checked = 0;
         int rateLimited = 0;
