@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Positive;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.List;
 
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Getter;
@@ -44,5 +45,29 @@ public class SignalProperties {
 
     @PositiveOrZero
     private BigDecimal minTotalAmount = BigDecimal.ZERO;
+
+    /**
+     * Включить фильтрацию сигналов на основе топ-холдеров противоположного исхода.
+     * Если true, перед сохранением сигнала проверяется объём позиций противоположного исхода.
+     * Если объём превышает {@link #oppositeHoldersMinAmount}, сигнал отбрасывается.
+     */
+    private Boolean filterOppositeHolders = false;
+
+    /**
+     * Минимальный суммарный объём топ-холдеров противоположного исхода для отклонения сигнала.
+     * Если объём холдеров >= этого значения, сигнал не будет сохранён.
+     * Default: 0 (фильтрация отключена).
+     */
+    @PositiveOrZero
+    private BigDecimal oppositeHoldersMinAmount = BigDecimal.ZERO;
+
+    /**
+     * Количество топ-холдеров для учёта при анализе противоположного исхода.
+     * Default: 20.
+     */
+    @Positive
+    private Integer oppositeHoldersLimit = 20;
+
+    private List<String> excludedTitlePatterns = List.of();
 }
 

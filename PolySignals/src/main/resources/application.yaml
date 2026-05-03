@@ -33,7 +33,12 @@ spring:
     baseline-on-migrate: true
 
   cache:
-    type: simple
+    type: caffeine
+    caffeine:
+      spec: maximumSize=1000,expireAfterWrite=10m
+    cache-names:
+      - markets
+      - marketHolders
 
   jackson:
     time-zone: UTC
@@ -60,6 +65,11 @@ app:
     backup-period: ${SIGNAL_BACKUP_PERIOD:7d}
     retry-unsent-enabled: ${SIGNAL_RETRY_UNSENT_ENABLED:false}
     min-total-amount: ${SIGNAL_MIN_TOTAL_AMOUNT:1000}
+    filter-opposite-holders: ${SIGNAL_FILTER_OPPOSITE_HOLDERS:false}
+    opposite-holders-min-amount: ${SIGNAL_OPPOSITE_HOLDERS_MIN_AMOUNT:0}
+    opposite-holders-limit: ${SIGNAL_OPPOSITE_HOLDERS_LIMIT:20}
+    excluded-title-patterns: ${SIGNAL_EXCLUDED_TITLE_PATTERNS:}
+
   polymarket:
     retry:
       max-attempts: ${POLYMARKET_RETRY_MAX_ATTEMPTS:3}

@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import ru.gbp.PolySignals.client.polymarket.GammaApiClient;
+import ru.gbp.PolySignals.client.polymarket.HoldersApiClient;
 import ru.gbp.PolySignals.client.polymarket.dto.MarketDetailsDto;
 import ru.gbp.PolySignals.config.properties.SignalProperties;
 import ru.gbp.PolySignals.domain.entity.Bet;
@@ -39,6 +40,7 @@ public class SignalDetectionService {
     private final SignalRepository signalRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final GammaApiClient gammaApiClient;
+    private final HoldersApiClient holdersApiClient;
     private final SignalProperties signalProperties;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, noRollbackFor = DataIntegrityViolationException.class)
@@ -118,6 +120,16 @@ public class SignalDetectionService {
             return;
         }
 
+        // Фильтрация по топ-холдерам противоположного исхода
+        if (Boolean.TRUE.equals(signalProperties.getFilterOppositeHolders())) {
+            String signalOutcome = normalizeOutcome(stats.getOutcome());
+            if (isFilteredByOppositeHolders(normalizeMarketId(stats.getMarketId()), signalOutcome)) {
+                log.info("Signal ignored: opposite outcome has strong holders for market={}, outcome={}",
+                        stats.getMarketId(), signalOutcome);
+                return;
+            }
+        }
+
         String normalizedMarketId = normalizeMarketId(stats.getMarketId());
         String normalizedOutcome = normalizeOutcome(stats.getOutcome());
 
@@ -127,6 +139,16 @@ public class SignalDetectionService {
                 .filter(this::hasText)
                 .distinct()
                 .collect(Collectors.toList());
+
+        if (signalProperties.getExcludedTitlePatterns() != null && !signalProperties.getExcludedTitlePatterns().isEmpty()) {
+            String titleLower = title != null ? title.toLowerCase() : "";
+            boolean excluded = signalProperties.getExcludedTitlePatterns().stream()
+                    .anyMatch(pattern -> titleLower.contains(pattern.toLowerCase()));
+            if (excluded) {
+                log.info("Signal ignored: title '{}' matches excluded pattern", title);
+                return;
+            }
+        }
 
         Signal signal = new Signal();
         signal.setMarketId(normalizedMarketId);
@@ -307,5 +329,86 @@ public class SignalDetectionService {
             return "https://polymarket.com/event/" + market.getMarketId().trim();
         }
         return "https://polymarket.com/event/" + fallbackMarketId;
+    }
+
+    /**
+     * Проверяет наличие сильных холдеров противоположного исхода.
+     *
+     * Фильтрация применяется только если:
+     * - рынок бинарный (ровно 2 исхода);
+     * - текущий outcome найден в списке outcomes;
+     * - есть ровно 2 CLOB tokenIds;
+     * - можно однозначно сопоставить current outcome -> opposite token.
+     *
+     * Во всех неоднозначных случаях возвращает {@code false}, чтобы не терять валидные сигналы.
+     */
+    private boolean isFilteredByOppositeHolders(String marketId, String outcome) {
+        log.debug("isFilteredByOppositeHolders: marketId={}, outcome={}", marketId, outcome);
+
+        try {
+            MarketDetailsDto market = gammaApiClient.getMarket(marketId);
+            if (market == null) {
+                log.debug("Gamma market details are null for marketId={}, skipping opposite-holders filter", marketId);
+                return false;
+            }
+
+            List<String> outcomes = market.getOutcomes();
+            if (outcomes == null || outcomes.size() != 2) {
+                log.debug("Market {} is not binary (outcomes={}), skipping opposite-holders filter", marketId, outcomes);
+                return false;
+            }
+
+            List<String> clobTokenIds = market.getClobTokenIds();
+            if (clobTokenIds == null || clobTokenIds.size() != 2) {
+                log.debug("Market {} doesn't have exactly 2 clobTokenIds ({}), skipping filter", marketId, clobTokenIds);
+                return false;
+            }
+
+            int currentOutcomeIndex = findOutcomeIndexIgnoreCase(outcomes, outcome);
+            if (currentOutcomeIndex < 0) {
+                log.debug("Outcome '{}' not found in market outcomes {} for marketId={}, skipping filter",
+                        outcome, outcomes, marketId);
+                return false;
+            }
+
+            int oppositeOutcomeIndex = 1 - currentOutcomeIndex;
+            String oppositeTokenId = clobTokenIds.get(oppositeOutcomeIndex);
+            if (!hasText(oppositeTokenId)) {
+                log.debug("Opposite tokenId is blank for marketId={}, outcome={}, oppositeIndex={}",
+                        marketId, outcome, oppositeOutcomeIndex);
+                return false;
+            }
+
+            BigDecimal oppositeVolume = holdersApiClient.calculateOppositeOutcomeVolume(
+                    marketId,
+                    oppositeTokenId,
+                    signalProperties.getOppositeHoldersLimit()
+            );
+
+            log.info("Opposite outcome volume for market={}, outcome={}, oppositeTokenId={}: {} (threshold: {})",
+                    marketId, outcome, oppositeTokenId, oppositeVolume, signalProperties.getOppositeHoldersMinAmount());
+
+            return oppositeVolume.compareTo(signalProperties.getOppositeHoldersMinAmount()) >= 0;
+
+        } catch (Exception e) {
+            log.error("Error checking opposite holders for marketId={}, outcome={}: {}",
+                    marketId, outcome, e.getMessage(), e);
+            return false;
+        }
+    }
+
+    private int findOutcomeIndexIgnoreCase(List<String> outcomes, String targetOutcome) {
+        if (outcomes == null || targetOutcome == null) {
+            return -1;
+        }
+
+        for (int i = 0; i < outcomes.size(); i++) {
+            String candidate = outcomes.get(i);
+            if (candidate != null && candidate.trim().equalsIgnoreCase(targetOutcome.trim())) {
+                return i;
+            }
+        }
+
+        return -1;
     }
 }

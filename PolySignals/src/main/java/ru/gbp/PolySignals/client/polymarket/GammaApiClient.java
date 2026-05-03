@@ -23,7 +23,7 @@ public class GammaApiClient {
     private final WebClient gammaApiWebClient;
     private final RetryTemplate polymarketRetryTemplate;
 
-//    @Cacheable(cacheNames = "markets", key = "#marketId")
+    @Cacheable(cacheNames = "markets", key = "#marketId")
     public MarketDetailsDto getMarket(String marketId) {
 
         log.info("GammaApiClient.getMarket called for marketId={}", marketId);
@@ -71,6 +71,55 @@ public class GammaApiClient {
             return dto;
 
         });
+    }
+
+    /**
+     * Получить список CLOB токен ID (условные ID исходов) для маркета.
+     * Используется для сопоставления исхода (YES/NO) с соответствующим токеном при анализе холдеров.
+     *
+     * Например, для маркета YES может быть токен 0x1234..., для NO — 0x5678...
+     *
+     * @param marketId ID маркета (conditionId)
+     * @return список CLOB токен ID, или пустой список, если маркет не найден
+     */
+    public List<String> getClobTokenIds(String marketId) {
+        log.info("GammaApiClient.getClobTokenIds called for marketId={}", marketId);
+
+        try {
+            MarketDetailsDto market = getMarket(marketId);
+            if (market != null && market.getClobTokenIds() != null && !market.getClobTokenIds().isEmpty()) {
+                log.info("CLOB token IDs for marketId={}: {}", marketId, market.getClobTokenIds());
+                return market.getClobTokenIds();
+            }
+            log.warn("No CLOB token IDs found for marketId={}", marketId);
+            return List.of();
+        } catch (Exception e) {
+            log.error("Error getting CLOB token IDs for marketId={}: {}", marketId, e.getMessage(), e);
+            return List.of();
+        }
+    }
+
+    /**
+     * Получить список исходов маркета из Gamma API.
+     *
+     * @param marketId ID маркета (conditionId)
+     * @return список исходов или пустой список, если маркет не найден/поле отсутствует
+     */
+    public List<String> getOutcomes(String marketId) {
+        log.info("GammaApiClient.getOutcomes called for marketId={}", marketId);
+
+        try {
+            MarketDetailsDto market = getMarket(marketId);
+            if (market != null && market.getOutcomes() != null && !market.getOutcomes().isEmpty()) {
+                log.info("Outcomes for marketId={}: {}", marketId, market.getOutcomes());
+                return market.getOutcomes();
+            }
+            log.warn("No outcomes found for marketId={}", marketId);
+            return List.of();
+        } catch (Exception e) {
+            log.error("Error getting outcomes for marketId={}: {}", marketId, e.getMessage(), e);
+            return List.of();
+        }
     }
 
     private boolean isRetryableStatus(HttpStatusCode statusCode) {
