@@ -99,28 +99,28 @@ public class GammaApiClient {
         }
     }
 
-    /**
-     * Получить список исходов маркета из Gamma API.
-     *
-     * @param marketId ID маркета (conditionId)
-     * @return список исходов или пустой список, если маркет не найден/поле отсутствует
-     */
-    public List<String> getOutcomes(String marketId) {
-        log.info("GammaApiClient.getOutcomes called for marketId={}", marketId);
-
-        try {
-            MarketDetailsDto market = getMarket(marketId);
-            if (market != null && market.getOutcomes() != null && !market.getOutcomes().isEmpty()) {
-                log.info("Outcomes for marketId={}: {}", marketId, market.getOutcomes());
-                return market.getOutcomes();
-            }
-            log.warn("No outcomes found for marketId={}", marketId);
-            return List.of();
-        } catch (Exception e) {
-            log.error("Error getting outcomes for marketId={}: {}", marketId, e.getMessage(), e);
-            return List.of();
-        }
-    }
+//    /**
+//     * Получить список исходов маркета из Gamma API.
+//     *
+//     * @param marketId ID маркета (conditionId)
+//     * @return список исходов или пустой список, если маркет не найден/поле отсутствует
+//     */
+//    public List<String> getOutcomes(String marketId) {
+//        log.info("GammaApiClient.getOutcomes called for marketId={}", marketId);
+//
+//        try {
+//            MarketDetailsDto market = getMarket(marketId);
+//            if (market != null && market.getOutcomes() != null && !market.getOutcomes().isEmpty()) {
+//                log.info("Outcomes for marketId={}: {}", marketId, market.getOutcomes());
+//                return market.getOutcomes();
+//            }
+//            log.warn("No outcomes found for marketId={}", marketId);
+//            return List.of();
+//        } catch (Exception e) {
+//            log.error("Error getting outcomes for marketId={}: {}", marketId, e.getMessage(), e);
+//            return List.of();
+//        }
+//    }
 
     private boolean isRetryableStatus(HttpStatusCode statusCode) {
         return statusCode.value() == 429 || statusCode.is5xxServerError();

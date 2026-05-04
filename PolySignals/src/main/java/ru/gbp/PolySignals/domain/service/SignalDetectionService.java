@@ -352,30 +352,25 @@ public class SignalDetectionService {
                 return false;
             }
 
-            List<String> outcomes = market.getOutcomes();
-            if (outcomes == null || outcomes.size() != 2) {
-                log.debug("Market {} is not binary (outcomes={}), skipping opposite-holders filter", marketId, outcomes);
-                return false;
-            }
-
             List<String> clobTokenIds = market.getClobTokenIds();
             if (clobTokenIds == null || clobTokenIds.size() != 2) {
                 log.debug("Market {} doesn't have exactly 2 clobTokenIds ({}), skipping filter", marketId, clobTokenIds);
                 return false;
             }
 
-            int currentOutcomeIndex = findOutcomeIndexIgnoreCase(outcomes, outcome);
-            if (currentOutcomeIndex < 0) {
-                log.debug("Outcome '{}' not found in market outcomes {} for marketId={}, skipping filter",
-                        outcome, outcomes, marketId);
-                return false;
+            // Определяем индекс противоположного исхода по типу outcome
+            // Считаем, что первый токен (индекс 0) соответствует YES/UP/OVER, второй (индекс 1) – NO/DOWN/UNDER
+            int oppositeIndex;
+            String outcomeUpper = outcome.toUpperCase();
+            if (outcomeUpper.contains("YES") || outcomeUpper.contains("UP") || outcomeUpper.contains("OVER")) {
+                oppositeIndex = 1; // противоположный – второй токен
+            } else {
+                oppositeIndex = 0; // противоположный – первый токен
             }
 
-            int oppositeOutcomeIndex = 1 - currentOutcomeIndex;
-            String oppositeTokenId = clobTokenIds.get(oppositeOutcomeIndex);
+            String oppositeTokenId = clobTokenIds.get(oppositeIndex);
             if (!hasText(oppositeTokenId)) {
-                log.debug("Opposite tokenId is blank for marketId={}, outcome={}, oppositeIndex={}",
-                        marketId, outcome, oppositeOutcomeIndex);
+                log.debug("Opposite tokenId is blank for marketId={}, outcome={}", marketId, outcome);
                 return false;
             }
 

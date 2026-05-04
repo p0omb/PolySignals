@@ -52,10 +52,10 @@ public class MarketDetailsDto {
     @JsonDeserialize(using = FlexibleStringListDeserializer.class)
     private List<String> clobTokenIds;
 
-    @JsonProperty("outcomes")
-    @JsonAlias({"outcomeNames", "outcome_names"})
-    @JsonDeserialize(using = FlexibleStringListDeserializer.class)
-    private List<String> outcomes;
+//    @JsonProperty("outcomes")
+//    @JsonAlias({"outcomeNames", "outcome_names"})
+//    @JsonDeserialize(using = FlexibleStringListDeserializer.class)
+//    private List<String> outcomes;
 
     public static final class FlexibleStringListDeserializer extends JsonDeserializer<List<String>> {
 

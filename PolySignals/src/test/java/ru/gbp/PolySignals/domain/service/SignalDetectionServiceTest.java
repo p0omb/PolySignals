@@ -36,19 +36,26 @@ import ru.gbp.PolySignals.domain.repository.SignalRepository;
 @ExtendWith(MockitoExtension.class)
 class SignalDetectionServiceTest {
 
-    @Mock BetRepository betRepository;
-    @Mock SignalRepository signalRepository;
-    @Mock ApplicationEventPublisher eventPublisher;
-    @Mock GammaApiClient gammaApiClient;
-    @Mock HoldersApiClient holdersApiClient;
     @Mock
-    private SignalProperties signalProperties;
+    BetRepository betRepository;
+    @Mock
+    SignalRepository signalRepository;
+    @Mock
+    ApplicationEventPublisher eventPublisher;
+    @Mock
+    GammaApiClient gammaApiClient;
+    @Mock
+    HoldersApiClient holdersApiClient;
+    @Mock
+    SignalProperties signalProperties;
 
-    @InjectMocks SignalDetectionService signalDetectionService;
+    @InjectMocks
+    SignalDetectionService signalDetectionService;
 
     @BeforeEach
     void setUp() {
-        lenient().when(signalRepository.saveAndFlush(any(Signal.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(signalRepository.saveAndFlush(any(Signal.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(betRepository.findDistinctWhaleNamesByMarketOutcomeAndTimeRange(anyString(), anyString(), any(), any()))
                 .thenReturn(List.of("whale1", "whale2"));
         lenient().when(gammaApiClient.getMarket(anyString())).thenReturn(null);
@@ -58,6 +65,7 @@ class SignalDetectionServiceTest {
         lenient().when(signalProperties.getOppositeHoldersMinAmount()).thenReturn(new BigDecimal("1000"));
         lenient().when(signalProperties.getOppositeHoldersLimit()).thenReturn(20);
         lenient().when(signalProperties.getMinTotalAmount()).thenReturn(BigDecimal.ZERO);
+        lenient().when(signalProperties.getExcludedTitlePatterns()).thenReturn(List.of());
     }
 
     @Test
@@ -88,8 +96,6 @@ class SignalDetectionServiceTest {
 
     @Test
     void doesNotCreateSignalWhenCooldownActive() {
-        // В реальном сервисе cooldown проверяется через уникальный signal_key (DB constraint),
-        // а не через existsRecentSignal.
         Bet newBet = bet("m1", "yes", "whale2", "20", Instant.parse("2026-01-01T10:00:00Z"));
 
         when(betRepository.findMarketOutcomeSignalStats(anyString(), anyString(), any(), any()))
@@ -109,7 +115,6 @@ class SignalDetectionServiceTest {
 
     @Test
     void ignoresBetBelowMinBetSize() {
-        // В текущем сервисе нет фильтра minBetSize: проверяем, что запрос статистики всё равно выполняется.
         Bet newBet = bet("m1", "yes", "whale2", "1", Instant.parse("2026-01-01T10:00:00Z"));
 
         when(betRepository.findMarketOutcomeSignalStats(anyString(), anyString(), any(), any()))
@@ -126,18 +131,23 @@ class SignalDetectionServiceTest {
         verifyNoInteractions(eventPublisher);
     }
 
+    // НОВЫЕ ТЕСТЫ ДЛЯ ФИЛЬТРАЦИИ ПО ПРОТИВОПОЛОЖНЫМ ХОЛДЕРАМ
+
     @Test
     void filtersBinaryMarketWhenOppositeHoldersExceedThreshold() {
-        Bet newBet = bet("m1", "yes", "whale2", "20", Instant.parse("2026-01-01T10:00:00Z"));
+        Bet newBet = bet("m1", "YES", "whale2", "20", Instant.parse("2026-01-01T10:00:00Z"));
 
         when(signalProperties.getFilterOppositeHolders()).thenReturn(true);
         when(betRepository.findMarketOutcomeSignalStats(anyString(), anyString(), any(), any()))
                 .thenReturn(new MarketOutcomeSignalStatsProjectionStub(
-                        "m1", "yes", 2L, new BigDecimal("30"),
+                        "m1", "YES", 2L, new BigDecimal("2000"),
                         Instant.parse("2026-01-01T09:00:00Z"),
                         Instant.parse("2026-01-01T10:00:00Z")
                 ));
-        when(gammaApiClient.getMarket("m1")).thenReturn(binaryMarket("YES", "NO", "token-yes", "token-no"));
+        // Рынок бинарный: clobTokenIds содержит 2 токена
+        MarketDetailsDto market = new MarketDetailsDto();
+        market.setClobTokenIds(List.of("token-yes", "token-no"));
+        when(gammaApiClient.getMarket("m1")).thenReturn(market);
         when(holdersApiClient.calculateOppositeOutcomeVolume("m1", "token-no", 20))
                 .thenReturn(new BigDecimal("1500"));
 
@@ -149,16 +159,18 @@ class SignalDetectionServiceTest {
 
     @Test
     void doesNotFilterBinaryMarketWhenOppositeHoldersBelowThreshold() {
-        Bet newBet = bet("m1", "yes", "whale2", "20", Instant.parse("2026-01-01T10:00:00Z"));
+        Bet newBet = bet("m1", "YES", "whale2", "20", Instant.parse("2026-01-01T10:00:00Z"));
 
         when(signalProperties.getFilterOppositeHolders()).thenReturn(true);
         when(betRepository.findMarketOutcomeSignalStats(anyString(), anyString(), any(), any()))
                 .thenReturn(new MarketOutcomeSignalStatsProjectionStub(
-                        "m1", "yes", 2L, new BigDecimal("30"),
+                        "m1", "YES", 2L, new BigDecimal("2000"),
                         Instant.parse("2026-01-01T09:00:00Z"),
                         Instant.parse("2026-01-01T10:00:00Z")
                 ));
-        when(gammaApiClient.getMarket("m1")).thenReturn(binaryMarket("YES", "NO", "token-yes", "token-no"));
+        MarketDetailsDto market = new MarketDetailsDto();
+        market.setClobTokenIds(List.of("token-yes", "token-no"));
+        when(gammaApiClient.getMarket("m1")).thenReturn(market);
         when(holdersApiClient.calculateOppositeOutcomeVolume("m1", "token-no", 20))
                 .thenReturn(new BigDecimal("10"));
 
@@ -170,19 +182,19 @@ class SignalDetectionServiceTest {
 
     @Test
     void doesNotFilterNonBinaryMarket() {
-        Bet newBet = bet("m1", "yes", "whale2", "20", Instant.parse("2026-01-01T10:00:00Z"));
+        Bet newBet = bet("m1", "YES", "whale2", "20", Instant.parse("2026-01-01T10:00:00Z"));
 
         when(signalProperties.getFilterOppositeHolders()).thenReturn(true);
         when(betRepository.findMarketOutcomeSignalStats(anyString(), anyString(), any(), any()))
                 .thenReturn(new MarketOutcomeSignalStatsProjectionStub(
-                        "m1", "yes", 2L, new BigDecimal("30"),
+                        "m1", "YES", 2L, new BigDecimal("2000"),
                         Instant.parse("2026-01-01T09:00:00Z"),
                         Instant.parse("2026-01-01T10:00:00Z")
                 ));
-        when(gammaApiClient.getMarket("m1")).thenReturn(binaryMarket(
-                List.of("YES", "NO", "DRAW"),
-                List.of("token-yes", "token-no", "token-draw")
-        ));
+        // Рынок не бинарный: clobTokenIds содержит 3 токена
+        MarketDetailsDto market = new MarketDetailsDto();
+        market.setClobTokenIds(List.of("token-a", "token-b", "token-c"));
+        when(gammaApiClient.getMarket("m1")).thenReturn(market);
 
         signalDetectionService.checkSignalForNewBet(newBet, Duration.ofDays(4), Duration.ofHours(6));
 
@@ -192,17 +204,19 @@ class SignalDetectionServiceTest {
     }
 
     @Test
-    void doesNotFilterWhenOutcomeDoesNotMatchBinaryOutcomes() {
+    void doesNotFilterWhenClobTokenIdsMissing() {
         Bet newBet = bet("m1", "YES", "whale2", "20", Instant.parse("2026-01-01T10:00:00Z"));
 
         when(signalProperties.getFilterOppositeHolders()).thenReturn(true);
         when(betRepository.findMarketOutcomeSignalStats(anyString(), anyString(), any(), any()))
                 .thenReturn(new MarketOutcomeSignalStatsProjectionStub(
-                        "m1", "YES", 2L, new BigDecimal("30"),
+                        "m1", "YES", 2L, new BigDecimal("2000"),
                         Instant.parse("2026-01-01T09:00:00Z"),
                         Instant.parse("2026-01-01T10:00:00Z")
                 ));
-        when(gammaApiClient.getMarket("m1")).thenReturn(binaryMarket("Team A", "Team B", "token-a", "token-b"));
+        MarketDetailsDto market = new MarketDetailsDto();
+        market.setClobTokenIds(null);
+        when(gammaApiClient.getMarket("m1")).thenReturn(market);
 
         signalDetectionService.checkSignalForNewBet(newBet, Duration.ofDays(4), Duration.ofHours(6));
 
@@ -210,6 +224,8 @@ class SignalDetectionServiceTest {
         verifyNoInteractions(holdersApiClient);
         verify(eventPublisher).publishEvent(any(SignalCreatedEvent.class));
     }
+
+    // Вспомогательные методы
 
     private Bet bet(String marketId, String outcome, String whaleId, String amount, Instant time) {
         Bet bet = new Bet();
@@ -226,20 +242,6 @@ class SignalDetectionServiceTest {
         bet.setWhale(whale);
 
         return bet;
-    }
-
-    private MarketDetailsDto binaryMarket(List<String> outcomes, List<String> clobTokenIds) {
-        MarketDetailsDto market = new MarketDetailsDto();
-        market.setMarketId("m1");
-        market.setOutcomes(outcomes);
-        market.setClobTokenIds(clobTokenIds);
-        market.setQuestion("Test market");
-        market.setSlug("test-market");
-        return market;
-    }
-
-    private MarketDetailsDto binaryMarket(String firstOutcome, String secondOutcome, String firstToken, String secondToken) {
-        return binaryMarket(List.of(firstOutcome, secondOutcome), List.of(firstToken, secondToken));
     }
 
     private static final class MarketOutcomeSignalStatsProjectionStub implements MarketOutcomeSignalProjection {
@@ -266,11 +268,34 @@ class SignalDetectionServiceTest {
             this.lastBetAt = lastBetAt;
         }
 
-        public String getMarketId() { return marketId; }
-        public String getOutcome() { return outcome; }
-        public Long getWhalesCount() { return whalesCount; }
-        public BigDecimal getTotalAmount() { return totalAmount; }
-        public Instant getFirstBetAt() { return firstBetAt; }
-        public Instant getLastBetAt() { return lastBetAt; }
+        @Override
+        public String getMarketId() {
+            return marketId;
+        }
+
+        @Override
+        public String getOutcome() {
+            return outcome;
+        }
+
+        @Override
+        public Long getWhalesCount() {
+            return whalesCount;
+        }
+
+        @Override
+        public BigDecimal getTotalAmount() {
+            return totalAmount;
+        }
+
+        @Override
+        public Instant getFirstBetAt() {
+            return firstBetAt;
+        }
+
+        @Override
+        public Instant getLastBetAt() {
+            return lastBetAt;
+        }
     }
 }
