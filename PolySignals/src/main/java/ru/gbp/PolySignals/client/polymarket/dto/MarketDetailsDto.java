@@ -1,6 +1,7 @@
 package ru.gbp.PolySignals.client.polymarket.dto;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonParser;
@@ -15,6 +16,7 @@ import lombok.NoArgsConstructor;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 @Data
@@ -49,48 +51,29 @@ public class MarketDetailsDto {
 
     @JsonProperty("clobTokenIds")
     @JsonAlias({"clob_token_ids", "tokenIds", "token_ids"})
-    @JsonDeserialize(using = FlexibleStringListDeserializer.class)
-    private List<String> clobTokenIds;
+    private String clobTokenIdsRaw;   // строка вида "[\"token1\",\"token2\"]"
 
-//    @JsonProperty("outcomes")
-//    @JsonAlias({"outcomeNames", "outcome_names"})
-//    @JsonDeserialize(using = FlexibleStringListDeserializer.class)
-//    private List<String> outcomes;
-
-    public static final class FlexibleStringListDeserializer extends JsonDeserializer<List<String>> {
-
-        @Override
-        public List<String> deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
-            if (p == null || p.getCurrentToken() == null) {
-                return List.of();
-            }
-
-            try {
-                if (p.getCurrentToken().isStructStart()) {
-                    return p.readValueAs(new TypeReference<List<String>>() {});
-                }
-
-                if (p.getCurrentToken().isScalarValue()) {
-                    String text = p.getValueAsString();
-                    if (text == null || text.isBlank()) {
-                        return List.of();
-                    }
-
-                    text = text.trim();
-                    if (text.startsWith("[") && text.endsWith("]")) {
-                        return p.getCodec().readValue(p.getCodec().getFactory().createParser(text), new TypeReference<List<String>>() {});
-                    }
-
-                    return List.of(text);
-                }
-
-                return List.of();
-            } catch (JsonProcessingException e) {
-                return List.of();
-            } catch (Exception e) {
-                return List.of();
-            }
+    // Парсинг строки в список токенов
+    @JsonIgnore
+    public List<String> getClobTokenIds() {
+        if (clobTokenIdsRaw == null || clobTokenIdsRaw.isBlank()) {
+            return List.of();
         }
+        String trimmed = clobTokenIdsRaw.trim();
+        if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+            String content = trimmed.substring(1, trimmed.length() - 1);
+            if (content.isBlank()) return List.of();
+            String[] parts = content.split(",");
+            List<String> result = new ArrayList<>();
+            for (String part : parts) {
+                String cleaned = part.trim().replaceAll("^\"|\"$", "");
+                if (!cleaned.isEmpty()) {
+                    result.add(cleaned);
+                }
+            }
+            return result;
+        }
+        return List.of(trimmed);
     }
 
 //    @JsonAlias({"outcomePrices", "prices"})

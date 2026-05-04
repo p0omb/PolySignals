@@ -146,8 +146,9 @@ class SignalDetectionServiceTest {
                 ));
         // Рынок бинарный: clobTokenIds содержит 2 токена
         MarketDetailsDto market = new MarketDetailsDto();
-        market.setClobTokenIds(List.of("token-yes", "token-no"));
+        market.setClobTokenIdsRaw("[\"token-yes\",\"token-no\"]");
         when(gammaApiClient.getMarket("m1")).thenReturn(market);
+        assertThat(market.getClobTokenIds()).containsExactly("token-yes", "token-no");
         when(holdersApiClient.calculateOppositeOutcomeVolume("m1", "token-no", 20))
                 .thenReturn(new BigDecimal("1500"));
 
@@ -169,8 +170,9 @@ class SignalDetectionServiceTest {
                         Instant.parse("2026-01-01T10:00:00Z")
                 ));
         MarketDetailsDto market = new MarketDetailsDto();
-        market.setClobTokenIds(List.of("token-yes", "token-no"));
+        market.setClobTokenIdsRaw("[\"token-yes\",\"token-no\"]");
         when(gammaApiClient.getMarket("m1")).thenReturn(market);
+        assertThat(market.getClobTokenIds()).containsExactly("token-yes", "token-no");
         when(holdersApiClient.calculateOppositeOutcomeVolume("m1", "token-no", 20))
                 .thenReturn(new BigDecimal("10"));
 
@@ -193,8 +195,9 @@ class SignalDetectionServiceTest {
                 ));
         // Рынок не бинарный: clobTokenIds содержит 3 токена
         MarketDetailsDto market = new MarketDetailsDto();
-        market.setClobTokenIds(List.of("token-a", "token-b", "token-c"));
+        market.setClobTokenIdsRaw("[\"token-a\",\"token-b\",\"token-c\"]");
         when(gammaApiClient.getMarket("m1")).thenReturn(market);
+        assertThat(market.getClobTokenIds()).containsExactly("token-a", "token-b", "token-c");
 
         signalDetectionService.checkSignalForNewBet(newBet, Duration.ofDays(4), Duration.ofHours(6));
 
@@ -215,8 +218,9 @@ class SignalDetectionServiceTest {
                         Instant.parse("2026-01-01T10:00:00Z")
                 ));
         MarketDetailsDto market = new MarketDetailsDto();
-        market.setClobTokenIds(null);
+        market.setClobTokenIdsRaw(null);
         when(gammaApiClient.getMarket("m1")).thenReturn(market);
+        assertThat(market.getClobTokenIds()).isEmpty();
 
         signalDetectionService.checkSignalForNewBet(newBet, Duration.ofDays(4), Duration.ofHours(6));
 
