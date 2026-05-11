@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
+import org.springframework.transaction.support.TransactionTemplate;
 import ru.gbp.PolySignals.client.telegram.NotificationService;
 import ru.gbp.PolySignals.client.telegram.SignalNotificationPayload;
 import ru.gbp.PolySignals.domain.entity.Signal;
@@ -32,6 +33,7 @@ public class SignalNotificationRetryService {
     private final SignalRepository signalRepository;
     private final NotificationService notificationService;
     private final RetryTemplate signalNotificationRetryTemplate;
+    private final TransactionTemplate transactionTemplate;
 
     private final Set<Long> inFlight = ConcurrentHashMap.newKeySet();
 
@@ -60,36 +62,34 @@ public class SignalNotificationRetryService {
     }
 
     private void trySend(Long signalId) {
-        if (signalId == null) return;
-        if (!inFlight.add(signalId)) return;
+            if (signalId == null) return;
+            if (!inFlight.add(signalId)) return;
 
-        try {
-            signalNotificationRetryTemplate.execute(context -> {
-                sendOnce(signalId);
-                return null;
-            });
-        } catch (Exception ex) {
-            log.warn("Notification send failed for signalId={}, will retry later: {}", signalId, ex.getMessage());
-        } finally {
-            inFlight.remove(signalId);
+            try {
+                signalNotificationRetryTemplate.execute(context -> {
+                    transactionTemplate.executeWithoutResult(tx -> sendOnce(signalId));
+                    return null;
+                });
+            } catch (Exception ex) {
+                log.warn("Notification send failed for signalId={}, will retry later: {}", signalId, ex.getMessage());
+            } finally {
+                inFlight.remove(signalId);
+            }
         }
-    }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendOnce(Long signalId) {
         log.info("sendOnce called for signalId={}", signalId);
 
         Signal fresh = signalRepository.findById(signalId).orElse(null);
-        if (fresh == null) {
+        if (fresh == null || Boolean.TRUE.equals(fresh.getTelegramSent())) {
             log.warn("sendOnce skipped: signal not found, signalId={}", signalId);
             return;
         }
-        if (Boolean.TRUE.equals(fresh.getTelegramSent())) {
-            log.info("sendOnce skipped: already sent, signalId={}", signalId);
-            return;
-        }
+        String marketUrl = (fresh.getSlug() != null && !fresh.getSlug().isBlank())
+                ? "https://polymarket.com/event/" + fresh.getSlug()
+                : fresh.getMarketUrl();
 
-        String marketUrl = fresh.getSlug() != null ? "https://polymarket.com/event/" + fresh.getSlug() : null;
 
         SignalNotificationPayload payload = new SignalNotificationPayload(
                 fresh.getId(),

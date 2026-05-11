@@ -25,18 +25,16 @@ public class GammaApiClient {
 
     @Cacheable(cacheNames = "markets", key = "#marketId")
     public MarketDetailsDto getMarket(String marketId) {
-
         log.info("GammaApiClient.getMarket called for marketId={}", marketId);
 
         if (marketId == null || marketId.isBlank()) {
-            log.warn("GammaApiClient.getMarket: invalid marketId (null or blank)");
             throw new IllegalArgumentException("marketId must not be blank");
         }
 
+        final String requested = marketId.trim().toLowerCase();
         final String endpoint = MARKETS_ENDPOINT + "?condition_ids[]=" + marketId;
 
         return polymarketRetryTemplate.execute(context -> {
-
             List<MarketDetailsDto> markets = gammaApiWebClient.get()
                     .uri(uriBuilder -> uriBuilder
                             .path(MARKETS_ENDPOINT)
@@ -52,27 +50,39 @@ public class GammaApiClient {
                                     endpoint,
                                     response.headers().asHttpHeaders()
                             )))
-                    .bodyToMono(new ParameterizedTypeReference<List<MarketDetailsDto>>() {
-                    })
-                    .doOnError(e -> log.error("Gamma API error for marketId={}: {}", marketId, e.getMessage(), e))
+                    .bodyToMono(new ParameterizedTypeReference<List<MarketDetailsDto>>() {})
                     .block();
 
             if (markets == null || markets.isEmpty()) {
-                log.warn("Gamma API returned empty or null response for marketId={}", marketId);
+                log.warn("Gamma API returned empty response for requested conditionId={}", marketId);
                 return null;
             }
 
-            MarketDetailsDto dto = markets.get(0);
-            if (dto.getMarketId() == null || dto.getMarketId().isBlank()) {
-                log.debug("MarketId missing in response, setting fallback marketId={}", marketId);
-                dto.setMarketId(marketId);
-            }
-            log.info("Gamma API success for marketId={}, question={}, slug={}", marketId, dto.getQuestion(), dto.getSlug());
-            log.info("Gamma API response: id={}, question={}, clobTokenIds={}",
-                dto.getMarketId(), dto.getQuestion(), dto.getClobTokenIds());
-            return dto;
+            // ВАЖНО: не берем markets.get(0), а ищем точное совпадение conditionId
+            MarketDetailsDto matched = markets.stream()
+                    .filter(dto -> isSameConditionId(dto.getMarketId(), requested))
+                    .findFirst()
+                    .orElse(null);
 
+            if (matched == null) {
+                log.warn("Gamma API mismatch: requested conditionId={}, but no exact match in response. First item marketId={}",
+                        marketId, markets.get(0).getMarketId());
+                return null;
+            }
+
+            log.info("Gamma API success for marketId={}, question={}, slug={}",
+                    marketId, matched.getQuestion(), matched.getSlug());
+            log.debug("Gamma API matched: marketId={}, outcomes={}, clobTokenIds={}",
+                    matched.getMarketId(), matched.getOutcomes(), matched.getClobTokenIds());
+            return matched;
         });
+    }
+
+    private boolean isSameConditionId(String dtoMarketId, String requested) {
+        if (dtoMarketId == null || dtoMarketId.isBlank()) {
+            return false;
+        }
+        return dtoMarketId.trim().toLowerCase().equals(requested);
     }
 
     /**

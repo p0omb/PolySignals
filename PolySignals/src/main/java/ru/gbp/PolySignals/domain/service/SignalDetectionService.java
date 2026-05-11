@@ -343,70 +343,68 @@ public class SignalDetectionService {
      * Во всех неоднозначных случаях возвращает {@code false}, чтобы не терять валидные сигналы.
      */
     private boolean isFilteredByOppositeHolders(String marketId, String outcome) {
-        log.debug("isFilteredByOppositeHolders: marketId={}, outcome={}", marketId, outcome);
 
-        try {
-            MarketDetailsDto market = gammaApiClient.getMarket(marketId);
-            if (market == null) {
-                log.debug("Gamma market details are null for marketId={}, skipping opposite-holders filter", marketId);
-                return false;
-            }
+            log.debug("isFilteredByOppositeHolders: marketId={}, outcome={}", marketId, outcome);
 
-            List<String> clobTokenIds = market.getClobTokenIds();
-            if (clobTokenIds == null || clobTokenIds.size() != 2) {
-                log.debug("Market {} doesn't have exactly 2 clobTokenIds ({}), skipping filter", marketId, clobTokenIds);
-                return false;
-            }
-
-            // Попытка получить outcomes из Gamma API
-            List<String> outcomes = market.getOutcomes();
-            if (outcomes == null || outcomes.size() != 2) {
-                log.warn("Market {} doesn't have exactly 2 outcomes ({}), using fallback outcome detection", marketId, outcomes);
-                // fallback: используем простую логику по названию исхода
-                return isFilteredByOppositeHoldersFallback(marketId, outcome, clobTokenIds);
-            }
-
-            // Находим индекс текущего исхода в списке outcomes
-            int outcomeIndex = -1;
-            for (int i = 0; i < outcomes.size(); i++) {
-                if (outcomes.get(i).equalsIgnoreCase(outcome)) {
-                    outcomeIndex = i;
-                    break;
+            try {
+                MarketDetailsDto market = gammaApiClient.getMarket(marketId);
+                if (market == null) {
+                    log.debug("Gamma market details are null for marketId={}, skip filter", marketId);
+                    return false;
                 }
+
+                List<String> outcomes = market.getOutcomes();
+                List<String> clobTokenIds = market.getClobTokenIds();
+
+                // Фильтр применяем ТОЛЬКО для строго бинарных рынков
+                if (outcomes == null || outcomes.size() != 2) {
+                    log.debug("Skip filter: market {} is not binary by outcomes={}", marketId, outcomes);
+                    return false;
+                }
+                if (clobTokenIds == null || clobTokenIds.size() != 2) {
+                    log.debug("Skip filter: market {} has invalid clobTokenIds={}", marketId, clobTokenIds);
+                    return false;
+                }
+
+                int outcomeIndex = -1;
+                for (int i = 0; i < outcomes.size(); i++) {
+                    if (outcomes.get(i) != null && outcomes.get(i).equalsIgnoreCase(outcome)) {
+                        outcomeIndex = i;
+                        break;
+                    }
+                }
+
+                // Если исход не найден в outcomes -> не фильтруем (fail-open)
+                if (outcomeIndex == -1) {
+                    log.debug("Skip filter: outcome '{}' not found in {}", outcome, outcomes);
+                    return false;
+                }
+
+                int oppositeIndex = 1 - outcomeIndex;
+                String oppositeTokenId = clobTokenIds.get(oppositeIndex);
+                if (!hasText(oppositeTokenId)) {
+                    log.debug("Skip filter: blank oppositeTokenId for marketId={}, outcome={}", marketId, outcome);
+                    return false;
+                }
+
+                BigDecimal oppositeVolume = holdersApiClient.calculateOppositeOutcomeVolume(
+                        marketId,
+                        oppositeTokenId,
+                        signalProperties.getOppositeHoldersLimit()
+                );
+
+                BigDecimal threshold = signalProperties.getOppositeHoldersMinAmount();
+                boolean filtered = oppositeVolume.compareTo(threshold) >= 0;
+
+                log.info("Opposite holders check: market={}, outcome={}, oppositeOutcome={}, oppositeTokenId={}, volume={}, threshold={}, filtered={}",
+                        marketId, outcome, outcomes.get(oppositeIndex), oppositeTokenId, oppositeVolume, threshold, filtered);
+
+                return filtered;
+            } catch (Exception e) {
+                log.warn("Opposite holders check failed for marketId={}, outcome={}: {}", marketId, outcome, e.getMessage());
+                return false; // fail-open: не теряем сигналы
             }
-
-            if (outcomeIndex == -1) {
-                log.warn("Outcome '{}' not found in market outcomes {} for marketId={}", outcome, outcomes, marketId);
-                // fallback если исход не найден
-                return isFilteredByOppositeHoldersFallback(marketId, outcome, clobTokenIds);
-            }
-
-            // Противоположный индекс = 1 - текущий индекс (работает для 2 исходов)
-            int oppositeIndex = 1 - outcomeIndex;
-            String oppositeTokenId = clobTokenIds.get(oppositeIndex);
-
-            if (!hasText(oppositeTokenId)) {
-                log.debug("Opposite tokenId is blank for marketId={}, outcome={}", marketId, outcome);
-                return false;
-            }
-
-            BigDecimal oppositeVolume = holdersApiClient.calculateOppositeOutcomeVolume(
-                    marketId,
-                    oppositeTokenId,
-                    signalProperties.getOppositeHoldersLimit()
-            );
-
-            log.info("Opposite outcome volume for market={}, outcome={}, oppositeOutcome={}, oppositeTokenId={}: {} (threshold: {})",
-                    marketId, outcome, outcomes.get(oppositeIndex), oppositeTokenId, oppositeVolume, signalProperties.getOppositeHoldersMinAmount());
-
-            return oppositeVolume.compareTo(signalProperties.getOppositeHoldersMinAmount()) >= 0;
-
-        } catch (Exception e) {
-            log.error("Error checking opposite holders for marketId={}, outcome={}: {}",
-                    marketId, outcome, e.getMessage(), e);
-            return false;
         }
-    }
 
     /**
      * Fallback логика для определения противоположного исхода по названию
