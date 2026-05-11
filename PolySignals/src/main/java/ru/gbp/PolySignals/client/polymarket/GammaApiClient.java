@@ -68,6 +68,8 @@ public class GammaApiClient {
                 dto.setMarketId(marketId);
             }
             log.info("Gamma API success for marketId={}, question={}, slug={}", marketId, dto.getQuestion(), dto.getSlug());
+            log.info("Gamma API response: id={}, question={}, clobTokenIds={}",
+                dto.getMarketId(), dto.getQuestion(), dto.getClobTokenIds());
             return dto;
 
         });

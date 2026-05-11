@@ -358,17 +358,33 @@ public class SignalDetectionService {
                 return false;
             }
 
-            // Определяем индекс противоположного исхода по типу outcome
-            // Считаем, что первый токен (индекс 0) соответствует YES/UP/OVER, второй (индекс 1) – NO/DOWN/UNDER
-            int oppositeIndex;
-            String outcomeUpper = outcome.toUpperCase();
-            if (outcomeUpper.contains("YES") || outcomeUpper.contains("UP") || outcomeUpper.contains("OVER")) {
-                oppositeIndex = 1; // противоположный – второй токен
-            } else {
-                oppositeIndex = 0; // противоположный – первый токен
+            // Попытка получить outcomes из Gamma API
+            List<String> outcomes = market.getOutcomes();
+            if (outcomes == null || outcomes.size() != 2) {
+                log.warn("Market {} doesn't have exactly 2 outcomes ({}), using fallback outcome detection", marketId, outcomes);
+                // fallback: используем простую логику по названию исхода
+                return isFilteredByOppositeHoldersFallback(marketId, outcome, clobTokenIds);
             }
 
+            // Находим индекс текущего исхода в списке outcomes
+            int outcomeIndex = -1;
+            for (int i = 0; i < outcomes.size(); i++) {
+                if (outcomes.get(i).equalsIgnoreCase(outcome)) {
+                    outcomeIndex = i;
+                    break;
+                }
+            }
+
+            if (outcomeIndex == -1) {
+                log.warn("Outcome '{}' not found in market outcomes {} for marketId={}", outcome, outcomes, marketId);
+                // fallback если исход не найден
+                return isFilteredByOppositeHoldersFallback(marketId, outcome, clobTokenIds);
+            }
+
+            // Противоположный индекс = 1 - текущий индекс (работает для 2 исходов)
+            int oppositeIndex = 1 - outcomeIndex;
             String oppositeTokenId = clobTokenIds.get(oppositeIndex);
+
             if (!hasText(oppositeTokenId)) {
                 log.debug("Opposite tokenId is blank for marketId={}, outcome={}", marketId, outcome);
                 return false;
@@ -380,8 +396,8 @@ public class SignalDetectionService {
                     signalProperties.getOppositeHoldersLimit()
             );
 
-            log.info("Opposite outcome volume for market={}, outcome={}, oppositeTokenId={}: {} (threshold: {})",
-                    marketId, outcome, oppositeTokenId, oppositeVolume, signalProperties.getOppositeHoldersMinAmount());
+            log.info("Opposite outcome volume for market={}, outcome={}, oppositeOutcome={}, oppositeTokenId={}: {} (threshold: {})",
+                    marketId, outcome, outcomes.get(oppositeIndex), oppositeTokenId, oppositeVolume, signalProperties.getOppositeHoldersMinAmount());
 
             return oppositeVolume.compareTo(signalProperties.getOppositeHoldersMinAmount()) >= 0;
 
@@ -392,18 +408,34 @@ public class SignalDetectionService {
         }
     }
 
-    private int findOutcomeIndexIgnoreCase(List<String> outcomes, String targetOutcome) {
-        if (outcomes == null || targetOutcome == null) {
-            return -1;
+    /**
+     * Fallback логика для определения противоположного исхода по названию
+     */
+    private boolean isFilteredByOppositeHoldersFallback(String marketId, String outcome, List<String> clobTokenIds) {
+        log.debug("Using fallback opposite-holders filter for marketId={}, outcome={}", marketId, outcome);
+
+        int oppositeIndex;
+        String outcomeUpper = outcome.toUpperCase();
+        if (outcomeUpper.contains("YES") || outcomeUpper.contains("UP") || outcomeUpper.contains("OVER")) {
+            oppositeIndex = 1; // противоположный – второй токен
+        } else {
+            oppositeIndex = 0; // противоположный – первый токен
         }
 
-        for (int i = 0; i < outcomes.size(); i++) {
-            String candidate = outcomes.get(i);
-            if (candidate != null && candidate.trim().equalsIgnoreCase(targetOutcome.trim())) {
-                return i;
-            }
+        String oppositeTokenId = clobTokenIds.get(oppositeIndex);
+        if (!hasText(oppositeTokenId)) {
+            return false;
         }
 
-        return -1;
+        BigDecimal oppositeVolume = holdersApiClient.calculateOppositeOutcomeVolume(
+                marketId,
+                oppositeTokenId,
+                signalProperties.getOppositeHoldersLimit()
+        );
+
+        log.info("Opposite outcome volume (fallback) for market={}, outcome={}, oppositeTokenId={}: {} (threshold: {})",
+                marketId, outcome, oppositeTokenId, oppositeVolume, signalProperties.getOppositeHoldersMinAmount());
+
+        return oppositeVolume.compareTo(signalProperties.getOppositeHoldersMinAmount()) >= 0;
     }
 }
