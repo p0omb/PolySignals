@@ -81,48 +81,51 @@ public class SignalNotificationRetryService {
     public void sendOnce(Long signalId) {
         log.info("sendOnce called for signalId={}", signalId);
 
-        Signal fresh = signalRepository.findById(signalId).orElse(null);
-        if (fresh == null || Boolean.TRUE.equals(fresh.getTelegramSent())) {
-            log.warn("sendOnce skipped: signal not found, signalId={}", signalId);
+        Signal signal = signalRepository.findById(signalId).orElse(null);
+        if (signal == null) {
+            log.warn("Signal not found, signalId={}", signalId);
             return;
         }
-        String marketUrl = (fresh.getSlug() != null && !fresh.getSlug().isBlank())
-                ? "https://polymarket.com/event/" + fresh.getSlug()
-                : fresh.getMarketUrl();
+        if (Boolean.TRUE.equals(signal.getTelegramSent())) {
+            log.info("Skipping already sent signalId={}", signalId);
+            return;
+        }
+        String marketUrl = (signal.getSlug() != null && !signal.getSlug().isBlank())
+                ? "https://polymarket.com/event/" + signal.getSlug()
+                : signal.getMarketUrl();
 
 
         SignalNotificationPayload payload = new SignalNotificationPayload(
-                fresh.getId(),
-                fresh.getMarketId(),
-                fresh.getMarketQuestion(),
+                signal.getId(),
+                signal.getMarketId(),
+                signal.getMarketQuestion(),
                 marketUrl,
-                fresh.getOutcome(),
-                fresh.getWhalesCount(),
-                fresh.getTotalAmount(),
-                fresh.getFirstBetAt(),
-                fresh.getLastBetAt(),
-                fresh.getWhaleLabels(),
-                fresh.getReason()
+                signal.getOutcome(),
+                signal.getWhalesCount(),
+                signal.getTotalAmount(),
+                signal.getFirstBetAt(),
+                signal.getLastBetAt(),
+                // важно: реальные whaleLabels из сигнала
+                signal.getWhaleLabels(),
+                signal.getReason()
         );
 
-        log.info("Sending notification for signalId={}", signalId);
-        notificationService.sendSignalNotification(payload);
-
-        int updated;
         try {
-            updated = signalRepository.markTelegramSent(signalId, Instant.now());
-        } catch (DataAccessException ex) {
+            log.info("Sending Telegram notification for signalId={}", signalId);
+            notificationService.sendSignalNotification(payload);
+
+            signal.setTelegramSent(true);
+            signal.setTelegramSentAt(Instant.now());
+            signalRepository.save(signal);
+
+            // либо, если используется атомарный update:
+            // signalRepository.markTelegramSent(signalId, Instant.now());
+
+            log.info("Telegram notification sent successfully, signalId={}", signalId);
+        } catch (Exception ex) {
+            log.error("Failed to send Telegram notification, signalId={}: {}", signalId, ex.getMessage(), ex);
+            // не менять telegramSent / telegramSentAt
             throw ex;
         }
-
-        if (updated == 0) {
-            log.debug("Signal {} already marked telegramSent by another worker", signalId);
-        }
-
-//        fresh.setTelegramSent(true);
-//        fresh.setTelegramSentAt(Instant.now());
-//        signalRepository.saveAndFlush(fresh);
-
-        log.info("sendOnce success, signalId={}", signalId);
     }
 }

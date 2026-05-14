@@ -4,21 +4,13 @@ import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.DeserializationContext;
-import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.io.IOException;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 @Data
@@ -28,7 +20,6 @@ import java.util.List;
 public class MarketDetailsDto {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-
 
     @JsonProperty("id")
     @JsonAlias({"marketId", "market_id", "conditionId", "condition_id"})
@@ -52,89 +43,59 @@ public class MarketDetailsDto {
     private Boolean closed;
 
     @JsonAlias({"endDate", "end_date"})
-    private Instant endDate;
+    private String endDateRaw;
 
     @JsonProperty("clobTokenIds")
     @JsonAlias({"clob_token_ids", "tokenIds", "token_ids"})
-    private String clobTokenIdsRaw;   // строка вида "[\"token1\",\"token2\"]"
+    private Object clobTokenIdsRaw;
 
     @JsonProperty("outcomes")
     @JsonAlias({"outcomeNames", "outcome_names"})
-    private String outcomesRaw;
+    private Object outcomesRaw;
 
     @JsonIgnore
     public List<String> getClobTokenIds() {
-        return parseJsonArrayString(clobTokenIdsRaw);
+        return parseToStringList(clobTokenIdsRaw);
     }
 
     @JsonIgnore
     public List<String> getOutcomes() {
-        return parseJsonArrayString(outcomesRaw);
+        return parseToStringList(outcomesRaw);
     }
 
-    private List<String> parseJsonArrayString(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return List.of();
-        }
+    /**
+     * Compatibility helper for existing code.
+     */
+    @JsonIgnore
+    public String getConditionId() {
+        return this.marketId;
+    }
 
-        String trimmed = raw.trim();
+    private List<String> parseToStringList(Object raw) {
+        if (raw == null) {
+            return Collections.emptyList();
+        }
 
         try {
-            if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-                return OBJECT_MAPPER.readValue(trimmed, new TypeReference<List<String>>() {
-                });
+            if (raw instanceof List<?> list) {
+                return list.stream()
+                        .filter(item -> item != null)
+                        .map(Object::toString)
+                        .toList();
             }
 
-            return List.of(trimmed);
+            String value = raw.toString().trim();
+            if (value.isEmpty()) {
+                return Collections.emptyList();
+            }
+
+            if (value.startsWith("[")) {
+                return OBJECT_MAPPER.readValue(value, new TypeReference<List<String>>() {});
+            }
+
+            return List.of(value);
         } catch (Exception ignored) {
-            return List.of();
-
+            return Collections.emptyList();
         }
-        // Парсинг строки в список токенов
-//    @JsonIgnore
-//    public List<String> getClobTokenIds() {
-//        if (clobTokenIdsRaw == null || clobTokenIdsRaw.isBlank()) {
-//            return List.of();
-//        }
-//        String trimmed = clobTokenIdsRaw.trim();
-//        if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-//            String content = trimmed.substring(1, trimmed.length() - 1);
-//            if (content.isBlank()) return List.of();
-//            String[] parts = content.split(",");
-//            List<String> result = new ArrayList<>();
-//            for (String part : parts) {
-//                String cleaned = part.trim().replaceAll("^\"|\"$", "");
-//                if (!cleaned.isEmpty()) {
-//                    result.add(cleaned);
-//                }
-//            }
-//            return result;
-//        }
-//        return List.of(trimmed);
-//    }
-//
-//    public List<String> getOutcomesAsList() {
-//        if (this.outcomes == null || this.outcomes.isBlank()) {
-//            return null;
-//        }
-//        try {
-//            // outcomes приходит как JSON строка: "[\"Yes\", \"No\"]"
-//            String trimmed = this.outcomes.trim();
-//            if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-//                // Убираем скобки и кавычки, затем разбиваем по запятой
-//                trimmed = trimmed.substring(1, trimmed.length() - 1);
-//                return Arrays.stream(trimmed.split(","))
-//                        .map(s -> s.trim().replaceAll("^\"|\"$", ""))
-//                        .filter(s -> !s.isBlank())
-//                        .toList();
-//            }
-//        } catch (Exception e) {
-//            log.warn("Error parsing outcomes from JSON: {}", this.outcomes, e);
-//        }
-//        return null;
-//    }
-
-//    @JsonAlias({"outcomePrices", "prices"})
-//    private List<String> outcomePrices;
     }
 }

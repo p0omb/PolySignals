@@ -23,41 +23,29 @@ class RetryConfigTest {
 
         RetryTemplate template = new RetryConfig(props).polymarketRetryTemplate();
 
-        AtomicInteger attempts500 = new AtomicInteger();
-        WebClientResponseException ex500 = WebClientResponseException.create(
-                500, "Internal Server Error", null, new byte[0], StandardCharsets.UTF_8
-        );
-        assertThrows(WebClientResponseException.class, () ->
-                template.execute(ctx -> {
-                    attempts500.incrementAndGet();
-                    throw ex500;
-                })
-        );
-        assertEquals(3, attempts500.get());
+        assertAttempts(template, 500, 3);
+        assertAttempts(template, 503, 3);
+        assertAttempts(template, 429, 3);
+        assertAttempts(template, 404, 1);
+    }
 
-        AtomicInteger attempts429 = new AtomicInteger();
-        WebClientResponseException ex429 = WebClientResponseException.create(
-                429, "Too Many Requests", null, new byte[0], StandardCharsets.UTF_8
+    private static void assertAttempts(RetryTemplate template, int status, int expectedAttempts) {
+        AtomicInteger attempts = new AtomicInteger();
+        WebClientResponseException ex = WebClientResponseException.create(
+                status,
+                "status-" + status,
+                null,
+                new byte[0],
+                StandardCharsets.UTF_8
         );
-        assertThrows(WebClientResponseException.class, () ->
-                template.execute(ctx -> {
-                    attempts429.incrementAndGet();
-                    throw ex429;
-                })
-        );
-        assertEquals(3, attempts429.get());
 
-        AtomicInteger attempts404 = new AtomicInteger();
-        WebClientResponseException ex404 = WebClientResponseException.create(
-                404, "Not Found", null, new byte[0], StandardCharsets.UTF_8
-        );
         assertThrows(WebClientResponseException.class, () ->
                 template.execute(ctx -> {
-                    attempts404.incrementAndGet();
-                    throw ex404;
+                    attempts.incrementAndGet();
+                    throw ex;
                 })
         );
-        assertEquals(1, attempts404.get());
+
+        assertEquals(expectedAttempts, attempts.get(), "Unexpected attempts for status " + status);
     }
 }
-

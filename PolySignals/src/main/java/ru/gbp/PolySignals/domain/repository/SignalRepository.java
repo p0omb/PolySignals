@@ -6,12 +6,14 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 import ru.gbp.PolySignals.domain.entity.Signal;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 @Repository
 public interface SignalRepository extends JpaRepository<Signal, Long> {
@@ -76,12 +78,19 @@ public interface SignalRepository extends JpaRepository<Signal, Long> {
     List<Long> findUnsentSignalIds(Pageable pageable);
 
     @Modifying
+    @Transactional
     @Query("""
-           update Signal s
-              set s.telegramSent = true,
-                  s.telegramSentAt = :sentAt
-            where s.id = :signalId
-              and s.telegramSent = false
-           """)
+        update Signal s
+           set s.telegramSent = true,
+               s.telegramSentAt = :sentAt
+         where s.id = :signalId
+    """)
     int markTelegramSent(@Param("signalId") Long signalId, @Param("sentAt") Instant sentAt);
+
+    @Query("""
+            SELECT s FROM Signal s
+            WHERE s.signalKey = :signalKey
+            """)
+    Optional<Signal> findBySignalKey(@Param("signalKey") String signalKey);
 }
+
