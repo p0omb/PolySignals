@@ -22,8 +22,10 @@ public class MarketDetailsDto {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @JsonProperty("id")
-    @JsonAlias({"marketId", "market_id", "conditionId", "condition_id"})
     private String marketId;
+
+    @JsonProperty("conditionId")
+    private String conditionId;
 
     @JsonProperty("question")
     @JsonAlias({"marketQuestion", "market_question"})
