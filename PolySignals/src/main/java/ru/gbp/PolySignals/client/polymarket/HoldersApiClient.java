@@ -18,7 +18,7 @@ import java.util.Objects;
 /**
  * Клиент для работы с эндпоинтом /holders Polymarket Data API.
  * Получает информацию о топ-холдерах для каждого исхода маркета.
- *
+ * <p>
  * Используется для фильтрации сигналов на основе наличия крупных позиций противоположного исхода.
  */
 @Slf4j
@@ -35,7 +35,7 @@ public class HoldersApiClient {
      * Получить холдеров для маркета.
      *
      * @param marketId ID маркета (conditionId)
-     * @param limit максимальное количество холдеров для возврата (по умолчанию 20)
+     * @param limit    максимальное количество холдеров для возврата (по умолчанию 20)
      * @return список {@link MarketHoldersResponseDto} с информацией о холдерах для каждого исхода
      */
     @Cacheable(cacheNames = "marketHolders", key = "#marketId + ':' + #limit")
@@ -88,8 +88,8 @@ public class HoldersApiClient {
      * Вычислить суммарный объём холдеров для определённого токена (исхода) маркета.
      *
      * @param marketId ID маркета
-     * @param tokenId ID токена (исхода)
-     * @param limit максимальное количество холдеров для учёта
+     * @param tokenId  ID токена (исхода)
+     * @param limit    максимальное количество холдеров для учёта
      * @return суммарный объём или {@code BigDecimal.ZERO}, если токен не найден
      */
     public BigDecimal calculateOppositeOutcomeVolume(String marketId, String tokenId, int limit) {
@@ -97,12 +97,32 @@ public class HoldersApiClient {
 
         try {
             List<MarketHoldersResponseDto> holders = getMarketHolders(marketId, limit);
-            return holders.stream()
+
+            // 🔥 НОВОЕ ЛОГИРОВАНИЕ
+            log.debug("getMarketHolders returned {} token groups for marketId={}", holders.size(), marketId);
+            holders.forEach(h -> {
+                log.debug("  Token group: token={}, holders.size={}", h.getToken(),
+                        h.getHolders() != null ? h.getHolders().size() : 0);
+                if (h.getHolders() != null) {
+                    h.getHolders().forEach(holder ->
+                            log.debug("    Holder: amount={}, asset={}", holder.getAmount(), holder.getAsset())
+                    );
+                }
+            });
+
+            BigDecimal result = holders.stream()
+                    .peek(h -> log.debug("Checking token: {} vs requested tokenId: {}", h.getToken(), tokenId))
                     .filter(h -> Objects.equals(h.getToken(), tokenId))
-                    .flatMap(h -> h.getHolders().stream())
+                    .peek(h -> log.debug("Token matched! Holders count: {}",
+                            h.getHolders() != null ? h.getHolders().size() : 0))
+                    .flatMap(h -> h.getHolders() == null ? java.util.stream.Stream.empty() : h.getHolders().stream())
                     .map(HolderDto::getAmount)
+                    .peek(amount -> log.debug("Holder amount: {}", amount))
                     .filter(Objects::nonNull)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            log.debug("Total volume calculated for tokenId={}: {}", tokenId, result);
+            return result;
         } catch (Exception e) {
             log.error("Error calculating opposite outcome volume for marketId={}, tokenId={}: {}",
                     marketId, tokenId, e.getMessage(), e);
