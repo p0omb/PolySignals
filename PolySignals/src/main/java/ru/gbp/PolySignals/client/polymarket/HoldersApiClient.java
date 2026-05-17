@@ -111,13 +111,11 @@ public class HoldersApiClient {
             });
 
             BigDecimal result = holders.stream()
-                    .peek(h -> log.debug("Checking token: {} vs requested tokenId: {}", h.getToken(), tokenId))
-                    .filter(h -> Objects.equals(h.getToken(), tokenId))
-                    .peek(h -> log.debug("Token matched! Holders count: {}",
-                            h.getHolders() != null ? h.getHolders().size() : 0))
                     .flatMap(h -> h.getHolders() == null ? java.util.stream.Stream.empty() : h.getHolders().stream())
+                    .peek(holder -> log.debug("Checking holder asset: {} vs requested tokenId: {}", holder.getAsset(), tokenId))
+                    .filter(holder -> Objects.equals(holder.getAsset(), tokenId))
                     .map(HolderDto::getAmount)
-                    .peek(amount -> log.debug("Holder amount: {}", amount))
+                    .peek(amount -> log.debug("Matched holder amount: {}", amount))
                     .filter(Objects::nonNull)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
