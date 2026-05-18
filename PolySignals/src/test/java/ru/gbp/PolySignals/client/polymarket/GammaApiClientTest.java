@@ -13,7 +13,6 @@ import org.springframework.web.reactive.function.client.WebClientRequestExceptio
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import ru.gbp.PolySignals.client.polymarket.dto.MarketDetailsDto;
 
-import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -38,94 +37,97 @@ class GammaApiClientTest {
                 .build();
 
         gammaApiClient = new GammaApiClient(webClient, retryTemplate(3));
-
-        // Ensure cache is initialized even when client was created directly in test (PostConstruct not called)
-        initializeCache(gammaApiClient);
     }
 
     @Test
     void getMarket_returnsMarketDetails_whenApiRespondsOk() {
+        // Используем "conditionId" — точное имя свойства в DTO
         wiremock.stubFor(get(urlPathEqualTo("/markets"))
-                .withQueryParam("condition_ids[]", equalTo("m1"))
-                .willReturn(okJson("[{\"id\":\"m1\",\"conditionId\":\"m1\",\"question\":\"Q\",\"slug\":\"q\",\"clobTokenIds\":\"[\\\"t1\\\",\\\"t2\\\"]\"}]")));
+                .withQueryParam("condition_ids", equalTo("m1"))
+                .willReturn(okJson("[{\"conditionId\":\"m1\",\"question\":\"Q\",\"slug\":\"q\",\"clob_token_ids\":\"[\\\"t1\\\",\\\"t2\\\"]\"}]")));
 
         MarketDetailsDto result = gammaApiClient.getMarket("m1");
 
         assertNotNull(result);
-        assertEquals("m1", result.getMarketId());
+        assertEquals("m1", result.getConditionId());
         assertEquals("q", result.getSlug());
+        assertFalse(result.getClobTokenIds().isEmpty());
+        assertEquals("t1", result.getClobTokenIds().get(0));
+        assertEquals("t2", result.getClobTokenIds().get(1));
 
         wiremock.verify(1, getRequestedFor(urlPathEqualTo("/markets"))
-                .withQueryParam("condition_ids[]", equalTo("m1")));
+                .withQueryParam("condition_ids", equalTo("m1")));
     }
 
     @Test
     void getMarket_retriesOnServerError_thenSucceeds() {
         wiremock.stubFor(get(urlPathEqualTo("/markets"))
-                .withQueryParam("condition_ids[]", equalTo("m2"))
+                .withQueryParam("condition_ids", equalTo("m2"))
                 .inScenario("gamma-retry-500")
                 .whenScenarioStateIs(STARTED)
                 .willReturn(serverError())
                 .willSetStateTo("SECOND"));
 
         wiremock.stubFor(get(urlPathEqualTo("/markets"))
-                .withQueryParam("condition_ids[]", equalTo("m2"))
+                .withQueryParam("condition_ids", equalTo("m2"))
                 .inScenario("gamma-retry-500")
                 .whenScenarioStateIs("SECOND")
                 .willReturn(serverError())
                 .willSetStateTo("SUCCESS"));
 
         wiremock.stubFor(get(urlPathEqualTo("/markets"))
-                .withQueryParam("condition_ids[]", equalTo("m2"))
+                .withQueryParam("condition_ids", equalTo("m2"))
                 .inScenario("gamma-retry-500")
                 .whenScenarioStateIs("SUCCESS")
-                .willReturn(okJson("[{\"id\":\"m2\",\"conditionId\":\"m2\",\"question\":\"Q2\",\"slug\":\"q2\",\"clobTokenIds\":\"[\\\"token-yes\\\",\\\"token-no\\\"]\"}]")));
+                .willReturn(okJson("[{\"conditionId\":\"m2\",\"question\":\"Q2\",\"slug\":\"q2\",\"clob_token_ids\":\"[\\\"token-yes\\\",\\\"token-no\\\"]\"}]")));
 
         MarketDetailsDto result = gammaApiClient.getMarket("m2");
 
         assertNotNull(result);
-        assertEquals("m2", result.getMarketId());
+        assertEquals("m2", result.getConditionId());
+        assertTrue(result.getClobTokenIds().size() == 2);
 
         wiremock.verify(3, getRequestedFor(urlPathEqualTo("/markets"))
-                .withQueryParam("condition_ids[]", equalTo("m2")));
+                .withQueryParam("condition_ids", equalTo("m2")));
     }
 
     @Test
     void getMarket_retriesOn429_thenSucceeds() {
         wiremock.stubFor(get(urlPathEqualTo("/markets"))
-                .withQueryParam("condition_ids[]", equalTo("m3"))
+                .withQueryParam("condition_ids", equalTo("m3"))
                 .inScenario("gamma-retry-429")
                 .whenScenarioStateIs(STARTED)
                 .willReturn(aResponse().withStatus(429))
                 .willSetStateTo("SUCCESS"));
 
         wiremock.stubFor(get(urlPathEqualTo("/markets"))
-                .withQueryParam("condition_ids[]", equalTo("m3"))
+                .withQueryParam("condition_ids", equalTo("m3"))
                 .inScenario("gamma-retry-429")
                 .whenScenarioStateIs("SUCCESS")
-                .willReturn(okJson("[{\"id\":\"m3\",\"conditionId\":\"m3\",\"question\":\"Q3\",\"slug\":\"q3\",\"clobTokenIds\":\"[\\\"token-yes\\\",\\\"token-no\\\"]\"}]")));
+                .willReturn(okJson("[{\"conditionId\":\"m3\",\"question\":\"Q3\",\"slug\":\"q3\",\"clob_token_ids\":\"[\\\"token-yes\\\",\\\"token-no\\\"]\"}]")));
 
         MarketDetailsDto result = gammaApiClient.getMarket("m3");
 
         assertNotNull(result);
-        assertEquals("m3", result.getMarketId());
+        assertEquals("m3", result.getConditionId());
+        assertTrue(result.getClobTokenIds().size() == 2);
 
         wiremock.verify(2, getRequestedFor(urlPathEqualTo("/markets"))
-                .withQueryParam("condition_ids[]", equalTo("m3")));
+                .withQueryParam("condition_ids", equalTo("m3")));
     }
 
     @Test
     void getMarket_doesNotRetryOn404() {
         wiremock.stubFor(get(urlPathEqualTo("/markets"))
-                .withQueryParam("condition_ids[]", equalTo("m404"))
+                .withQueryParam("condition_ids", equalTo("m404"))
                 .willReturn(aResponse().withStatus(404).withBody("not found")));
 
-        // GammaApiClient returns null (fail-open) for 404 cases in current implementation
+        // Теперь клиент возвращает null вместо исключения, так как все ошибки глушатся
         MarketDetailsDto result = gammaApiClient.getMarket("m404");
         assertNull(result);
 
         wiremock.verify(1, getRequestedFor(urlPathEqualTo("/markets"))
-                .withQueryParam("condition_ids[]", equalTo("m404")));
+                .withQueryParam("condition_ids", equalTo("m404")));
     }
 
     @Test
@@ -155,31 +157,5 @@ class GammaApiClientTest {
         });
         template.setBackOffPolicy(new NoBackOffPolicy());
         return template;
-    }
-
-    // Helper: try to initialize cache when client was constructed manually in tests.
-    private void initializeCache(Object client) {
-        if (client == null) return;
-        try {
-            // try package-private initCache()
-            Method init = client.getClass().getDeclaredMethod("initCache");
-            init.setAccessible(true);
-            init.invoke(client);
-            return;
-        } catch (NoSuchMethodException ignored) {
-            // try ensureCacheInitialized()
-        } catch (Exception ex) {
-            // ignore - proceed to try other method
-        }
-
-        try {
-            Method ensure = client.getClass().getDeclaredMethod("ensureCacheInitialized");
-            ensure.setAccessible(true);
-            ensure.invoke(client);
-        } catch (NoSuchMethodException ignored) {
-            // nothing to do
-        } catch (Exception ex) {
-            // ignore - tests will proceed; if cache remains null, other fixes needed in GammaApiClient
-        }
     }
 }

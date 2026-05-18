@@ -6,6 +6,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.retry.support.RetryTemplate;
 import org.springframework.stereotype.Service;
@@ -14,6 +15,7 @@ import ru.gbp.PolySignals.client.polymarket.dto.MarketDetailsDto;
 
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 
 @Slf4j
@@ -69,7 +71,7 @@ public class GammaApiClient {
     public MarketDetailsDto getMarket(String marketId) {
         ensureCacheInitialized();
 
-        log.info("GammaApiClient.getMarket called for marketId={}", marketId);
+        log.info("Getting market details from Data API for condition_id={}", marketId);
 
         if (marketId == null || marketId.isBlank()) {
             throw new IllegalArgumentException("marketId must not be blank");
@@ -78,18 +80,20 @@ public class GammaApiClient {
         String requestedId = marketId.trim();
         String cacheKey = requestedId.toLowerCase();
 
+        // Проверяем кеш
         MarketDetailsDto cached = marketCache.getIfPresent(cacheKey);
         if (cached != null) {
-            log.debug("Gamma API cache hit for marketId={}", requestedId);
+            log.debug("Data API cache hit for condition_id={}", requestedId);
             return cached;
         }
 
         try {
             MarketDetailsDto result = polymarketRetryTemplate.execute(context -> {
-                MarketDetailsDto[] markets = gammaApiWebClient.get()
+                // 1. Запрос к Data API
+                List<MarketDetailsDto> markets = gammaApiWebClient.get()
                         .uri(uriBuilder -> uriBuilder
                                 .path(MARKETS_ENDPOINT)
-                                .queryParam("condition_ids[]", requestedId)
+                                .queryParam("condition_ids", requestedId) // <-- используем condition_ids без []
                                 .build())
                         .retrieve()
                         .onStatus(this::isRetryableStatus, response ->
@@ -100,54 +104,40 @@ public class GammaApiClient {
                                         .map(body -> PolymarketApiErrorHandler.buildException(
                                                 response.statusCode().value(),
                                                 body,
-                                                MARKETS_ENDPOINT + "?condition_ids[]=" + requestedId,
+                                                MARKETS_ENDPOINT + "?condition_ids=" + requestedId,
                                                 response.headers().asHttpHeaders()
                                         )))
-                        .bodyToMono(MarketDetailsDto[].class)
+                        .bodyToMono(new ParameterizedTypeReference<List<MarketDetailsDto>>() {})
                         .block();
 
-                if (markets == null || markets.length == 0) {
-                    log.warn("Gamma API returned empty response for requested conditionId={}", requestedId);
+                // 2. Обработка ответа
+                if (markets == null || markets.isEmpty()) {
+                    log.warn("Data API returned empty or null response for condition_id={}", requestedId);
                     return null;
                 }
 
-                // 1. Ищем точное совпадение по conditionId (игнорируя регистр)
-                MarketDetailsDto exactMatch = Arrays.stream(markets)
-                        .filter(Objects::nonNull)
-                        .filter(md -> md.getConditionId() != null
-                                && md.getConditionId().trim().equalsIgnoreCase(requestedId))
-                        .findFirst()
-                        .orElse(null);
-
-                if (exactMatch != null) {
-                    marketCache.put(cacheKey, exactMatch);
-                    log.info("Gamma API exact match for conditionId={}, question={}", requestedId, exactMatch.getQuestion());
-                    return exactMatch;
+                if (markets.size() > 1) {
+                    log.warn("Data API returned {} markets for condition_id={}, using the first one.", markets.size(), requestedId);
                 }
 
-                // 2. Fallback: если массив содержит ровно один элемент, используем его
-                if (markets.length == 1) {
-                    MarketDetailsDto single = markets[0];
-                    log.warn("Gamma API: no exact conditionId match, but single market returned. " +
-                                    "Requested={}, got conditionId={}, id={}. Using it as fallback.",
-                            requestedId, single.getConditionId(), single.getMarketId());
-                    marketCache.put(cacheKey, single);
-                    return single;
+                MarketDetailsDto market = markets.get(0);
+                if (market.getClobTokenIds().isEmpty()) {
+                    log.warn("Market found in Data API, but clob_token_ids is empty for condition_id={}", requestedId);
                 }
 
-                // 3. Если рынков несколько и нет точного совпадения – возвращаем null
-                log.warn("Gamma API mismatch: requested conditionId={}, no exact match among {} results. " +
-                                "First item conditionId={}", requestedId, markets.length,
-                        markets[0] != null ? markets[0].getConditionId() : "null");
-                return null;
+                // 3. Кешируем и возвращаем результат
+                marketCache.put(cacheKey, market);
+                log.info("Successfully fetched market from Data API for condition_id={}. Tokens: {}", requestedId, market.getClobTokenIds());
+                return market;
+
             }, context -> {
-                log.error("Gamma API failed for marketId={} after retries, returning null", requestedId);
+                log.error("Data API failed for condition_id={} after retries, returning null", requestedId);
                 return null;
             });
 
             return result;
         } catch (Exception ex) {
-            log.error("Gamma API unexpected error for marketId={}: {}", requestedId, ex.getMessage(), ex);
+            log.error("Data API unexpected error for condition_id={}: {}", requestedId, ex.getMessage(), ex);
             return null;
         }
     }
