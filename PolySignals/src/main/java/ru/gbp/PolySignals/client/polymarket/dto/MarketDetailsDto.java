@@ -70,7 +70,7 @@ public class MarketDetailsDto {
      */
     @JsonIgnore
     public String getConditionId() {
-        return this.marketId;
+        return this.conditionId;
     }
 
     private List<String> parseToStringList(Object raw) {

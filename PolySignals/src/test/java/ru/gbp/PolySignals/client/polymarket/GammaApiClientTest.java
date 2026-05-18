@@ -47,7 +47,7 @@ class GammaApiClientTest {
     void getMarket_returnsMarketDetails_whenApiRespondsOk() {
         wiremock.stubFor(get(urlPathEqualTo("/markets"))
                 .withQueryParam("condition_ids[]", equalTo("m1"))
-                .willReturn(okJson("[{\"id\":\"m1\",\"question\":\"Q\",\"slug\":\"q\",\"clobTokenIds\":\"[\\\"t1\\\",\\\"t2\\\"]\"}]")));
+                .willReturn(okJson("[{\"id\":\"m1\",\"conditionId\":\"m1\",\"question\":\"Q\",\"slug\":\"q\",\"clobTokenIds\":\"[\\\"t1\\\",\\\"t2\\\"]\"}]")));
 
         MarketDetailsDto result = gammaApiClient.getMarket("m1");
 
@@ -79,7 +79,7 @@ class GammaApiClientTest {
                 .withQueryParam("condition_ids[]", equalTo("m2"))
                 .inScenario("gamma-retry-500")
                 .whenScenarioStateIs("SUCCESS")
-                .willReturn(okJson("[{\"id\":\"m2\",\"question\":\"Q2\",\"slug\":\"q2\",\"clobTokenIds\":\"[\\\"token-yes\\\",\\\"token-no\\\"]\"}]")));
+                .willReturn(okJson("[{\"id\":\"m2\",\"conditionId\":\"m2\",\"question\":\"Q2\",\"slug\":\"q2\",\"clobTokenIds\":\"[\\\"token-yes\\\",\\\"token-no\\\"]\"}]")));
 
         MarketDetailsDto result = gammaApiClient.getMarket("m2");
 
@@ -103,7 +103,7 @@ class GammaApiClientTest {
                 .withQueryParam("condition_ids[]", equalTo("m3"))
                 .inScenario("gamma-retry-429")
                 .whenScenarioStateIs("SUCCESS")
-                .willReturn(okJson("[{\"id\":\"m3\",\"question\":\"Q3\",\"slug\":\"q3\",\"clobTokenIds\":\"[\\\"token-yes\\\",\\\"token-no\\\"]\"}]")));
+                .willReturn(okJson("[{\"id\":\"m3\",\"conditionId\":\"m3\",\"question\":\"Q3\",\"slug\":\"q3\",\"clobTokenIds\":\"[\\\"token-yes\\\",\\\"token-no\\\"]\"}]")));
 
         MarketDetailsDto result = gammaApiClient.getMarket("m3");
 

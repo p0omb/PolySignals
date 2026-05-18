@@ -120,18 +120,13 @@ public class GammaApiClient {
                         .orElse(null);
 
                 if (exactMatch == null) {
-                    log.warn("Gamma API mismatch: requested conditionId={}, but no exact match in response. First item conditionId={}",
-                            requestedId,
-                            markets[0].getConditionId());
-                    exactMatch = markets[0];
-                    if (exactMatch == null) {
-                        log.error("Gamma API: first market is also null, cannot proceed");
-                        return null;
-                    }
-
+                    String firstConditionId = (markets[0] != null ? markets[0].getConditionId() : null);
+                    log.warn("Gamma API mismatch: requested conditionId={}, no exact match, firstItem.conditionId={}",
+                            requestedId, firstConditionId);
+                    return null; // no fallback to first item
                 }
 
-                marketCache.put(cacheKey, exactMatch);
+                marketCache.put(cacheKey, exactMatch); // cache only exact-match
                 log.info("Gamma API exact match for conditionId={}, question={}, slug={}",
                         requestedId, exactMatch.getQuestion(), exactMatch.getSlug());
                 return exactMatch;

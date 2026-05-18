@@ -333,6 +333,11 @@ public class SignalDetectionService {
 
         log.debug("isFilteredByOppositeHolders: marketId={}, outcome={}", marketId, outcome);
 
+        if (!hasText(outcome)) {
+            log.debug("Skip filter: requestedOutcome is blank for marketId={}", marketId);
+            return false; // fail-open
+        }
+
         try {
             MarketDetailsDto market = gammaApiClient.getMarket(marketId);
             if (market == null) {
@@ -343,8 +348,12 @@ public class SignalDetectionService {
             List<String> outcomes = market.getOutcomes();
             List<String> clobTokenIds = market.getClobTokenIds();
 
-            if (outcomes == null || clobTokenIds == null || outcomes.size() != 2 || clobTokenIds.size() != 2) {
-                log.debug("Skip filter: marketId={}, outcomes={}, clobTokenIds={}", marketId, outcomes, clobTokenIds);
+            if (outcomes == null || outcomes.size() != 2) {
+                log.debug("Skip filter: invalid outcomes for marketId={}, outcomes={}", marketId, outcomes);
+                return false;
+            }
+            if (clobTokenIds == null || clobTokenIds.size() != 2) {
+                log.debug("Skip filter: invalid clobTokenIds for marketId={}, clobTokenIds={}", marketId, clobTokenIds);
                 return false;
             }
 
@@ -376,8 +385,8 @@ public class SignalDetectionService {
             }
 
             if (outcomeIndex == -1) {
-                log.debug("Skip filter: outcome '{}' not matched in outcomes={} for marketId={}", outcome, outcomes, marketId);
-                return false; // fail-open
+                log.debug("Skip filter: requestedOutcome '{}' not found in outcomes={} for marketId={}", outcome, outcomes, marketId);
+                return false; // strictly no YES/NO fallback
             }
 
             int oppositeIndex = 1 - outcomeIndex;
@@ -386,8 +395,9 @@ public class SignalDetectionService {
             String oppositeTokenId = clobTokenIds.get(oppositeIndex);
 
             if (!hasText(oppositeTokenId)) {
-                log.debug("Skip filter: blank oppositeTokenId for marketId={}, outcome={}", marketId, outcome);
-                return false; // fail-open
+                log.debug("Skip filter: oppositeTokenId is blank for marketId={}, outcome={}, oppositeIndex={}",
+                        marketId, outcome, oppositeIndex);
+                return false;
             }
 
             BigDecimal oppositeVolume = holdersApiClient.calculateOppositeOutcomeVolume(
@@ -407,7 +417,7 @@ public class SignalDetectionService {
             return filtered;
         } catch (Exception e) {
             log.warn("Opposite holders check failed for marketId={}, outcome={}: {}", marketId, outcome, e.getMessage());
-            return false; // fail-open
+            return false;
         }
     }
 
