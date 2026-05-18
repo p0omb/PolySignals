@@ -87,7 +87,7 @@ public class SignalDetectionService {
             String slug,
             String title
     ) {
-        log.info("processMarketOutcome: marketId={}, outcome={}, from={}, to={}", marketId, outcome, from, to);
+        log.info("processMarketOutcome ENTER: marketId={}, outcome={}, from={}, to={}", marketId, outcome, from, to);
 
         validateMarketAndOutcome(marketId, outcome);
         validatePositiveDuration("signalWindow", signalWindow);
@@ -104,30 +104,50 @@ public class SignalDetectionService {
                 to
         );
 
-        if (stats != null) {
-            log.info("Stats: whalesCount={}, totalAmount={}", stats.getWhalesCount(), stats.getTotalAmount());
-        } else {
-            log.info("Stats: null for marketId={}, outcome={}", marketId, outcome);
+        if (stats == null) {
+            log.info("processMarketOutcome: stats is null for marketId={}, outcome={}", marketId, outcome);
+            return;
         }
 
-        if (stats == null || stats.getWhalesCount() == null || stats.getWhalesCount() < MIN_WHALES) {
+        log.info("processMarketOutcome: stats marketId={} outcome={} whalesCount={} totalAmount={} firstBet={} lastBet={}",
+                stats.getMarketId(), stats.getOutcome(), stats.getWhalesCount(), stats.getTotalAmount(),
+                stats.getFirstBetAt(), stats.getLastBetAt());
+
+        if (stats.getWhalesCount() == null || stats.getWhalesCount() < MIN_WHALES) {
+            log.info("Signal ignored: whalesCount={} < MIN_WHALES={} for market={} outcome={}",
+                    stats.getWhalesCount(), MIN_WHALES, stats.getMarketId(), stats.getOutcome());
             return;
         }
 
         if (signalProperties.getMinTotalAmount().compareTo(BigDecimal.ZERO) > 0
                 && stats.getTotalAmount().compareTo(signalProperties.getMinTotalAmount()) < 0) {
-            log.info("Signal ignored: totalAmount {} < minTotalAmount {}", stats.getTotalAmount(), signalProperties.getMinTotalAmount());
+            log.info("Signal ignored: totalAmount {} < minTotalAmount {} for market={} outcome={}",
+                    stats.getTotalAmount(), signalProperties.getMinTotalAmount(), stats.getMarketId(), stats.getOutcome());
             return;
         }
 
-        // Фильтрация по топ-холдерам противоположного исхода
+        // --- Проверка фильтра противоположных холдеров ---
+        log.info("BEFORE opposite filter: market={} outcome={} whales={} amount={} filterEnabled={}",
+                stats.getMarketId(), stats.getOutcome(), stats.getWhalesCount(), stats.getTotalAmount(),
+                signalProperties.getFilterOppositeHolders());
+
         if (Boolean.TRUE.equals(signalProperties.getFilterOppositeHolders())) {
             String signalOutcome = normalizeOutcome(stats.getOutcome());
-            if (isFilteredByOppositeHolders(normalizeMarketId(stats.getMarketId()), signalOutcome)) {
-                log.info("Signal ignored: opposite outcome has strong holders for market={}, outcome={}",
-                        stats.getMarketId(), signalOutcome);
-                return;
+            log.info("Calling isFilteredByOppositeHolders for market={}, outcome={}", normalizeMarketId(stats.getMarketId()), signalOutcome);
+            try {
+                boolean filtered = isFilteredByOppositeHolders(normalizeMarketId(stats.getMarketId()), signalOutcome);
+                log.info("isFilteredByOppositeHolders returned: {}", filtered);
+                if (filtered) {
+                    log.info("Signal ignored: opposite outcome has strong holders for market={}, outcome={}",
+                            stats.getMarketId(), signalOutcome);
+                    return;
+                }
+            } catch (Exception e) {
+                log.warn("Opposite filter threw exception for market={}, outcome={}: {}", stats.getMarketId(), signalOutcome, e.getMessage());
+                // fail-open: не фильтруем
             }
+        } else {
+            log.info("Opposite filter is disabled, skipping.");
         }
 
         String normalizedMarketId = normalizeMarketId(stats.getMarketId());
