@@ -67,7 +67,6 @@ public class GammaApiClient {
     }
 
     public MarketDetailsDto getMarket(String marketId) {
-        // ensure cache exists even when constructed directly in tests
         ensureCacheInitialized();
 
         log.info("GammaApiClient.getMarket called for marketId={}", marketId);
@@ -112,6 +111,7 @@ public class GammaApiClient {
                     return null;
                 }
 
+                // 1. Ищем точное совпадение по conditionId (игнорируя регистр)
                 MarketDetailsDto exactMatch = Arrays.stream(markets)
                         .filter(Objects::nonNull)
                         .filter(md -> md.getConditionId() != null
@@ -119,17 +119,27 @@ public class GammaApiClient {
                         .findFirst()
                         .orElse(null);
 
-                if (exactMatch == null) {
-                    String firstConditionId = (markets[0] != null ? markets[0].getConditionId() : null);
-                    log.warn("Gamma API mismatch: requested conditionId={}, no exact match, firstItem.conditionId={}",
-                            requestedId, firstConditionId);
-                    return null; // no fallback to first item
+                if (exactMatch != null) {
+                    marketCache.put(cacheKey, exactMatch);
+                    log.info("Gamma API exact match for conditionId={}, question={}", requestedId, exactMatch.getQuestion());
+                    return exactMatch;
                 }
 
-                marketCache.put(cacheKey, exactMatch); // cache only exact-match
-                log.info("Gamma API exact match for conditionId={}, question={}, slug={}",
-                        requestedId, exactMatch.getQuestion(), exactMatch.getSlug());
-                return exactMatch;
+                // 2. Fallback: если массив содержит ровно один элемент, используем его
+                if (markets.length == 1) {
+                    MarketDetailsDto single = markets[0];
+                    log.warn("Gamma API: no exact conditionId match, but single market returned. " +
+                                    "Requested={}, got conditionId={}, id={}. Using it as fallback.",
+                            requestedId, single.getConditionId(), single.getMarketId());
+                    marketCache.put(cacheKey, single);
+                    return single;
+                }
+
+                // 3. Если рынков несколько и нет точного совпадения – возвращаем null
+                log.warn("Gamma API mismatch: requested conditionId={}, no exact match among {} results. " +
+                                "First item conditionId={}", requestedId, markets.length,
+                        markets[0] != null ? markets[0].getConditionId() : "null");
+                return null;
             }, context -> {
                 log.error("Gamma API failed for marketId={} after retries, returning null", requestedId);
                 return null;
