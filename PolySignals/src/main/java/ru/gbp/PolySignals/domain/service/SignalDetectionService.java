@@ -1,9 +1,13 @@
 package ru.gbp.PolySignals.domain.service;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,9 +26,9 @@ import ru.gbp.PolySignals.domain.repository.SignalRepository;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
-import java.util.Locale;
-import java.util.Objects;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -42,6 +46,41 @@ public class SignalDetectionService {
     private final GammaApiClient gammaApiClient;
     private final HoldersApiClient holdersApiClient;
     private final SignalProperties signalProperties;
+
+    private final Cache<String, Double> recentScores = Caffeine.newBuilder()
+            .expireAfterWrite(30, TimeUnit.MINUTES)
+            .maximumSize(1000)
+            .build();
+
+    private final AtomicInteger betsToday = new AtomicInteger(0);
+    private volatile Instant lastBetTime = Instant.EPOCH;
+
+    @Value("${signal.max.bets.per.day:18}")
+    private int maxBetsPerDay;
+
+    @Value("${signal.min.interval.between.bets.minutes:30}")
+    private int minIntervalMinutes;
+
+    @Value("${signal.top.percent:20}")
+    private double topPercent;
+
+    @Value("${signal.freshness.half.life.seconds:300}")
+    private double freshnessHalfLife;
+
+    @Scheduled(cron = "0 0 3 * * *") // в 03:00
+    public void resetDailyBets() {
+        int prev = betsToday.getAndSet(0);
+        log.info("Daily bet counter reset, previous: {}", prev);
+    }
+
+    private double computeTopPercentile(double topPercent) {
+        List<Double> scores = new ArrayList<>(recentScores.asMap().values());
+        if (scores.isEmpty()) return 0.0;
+        Collections.sort(scores);
+        int index = (int) Math.ceil(scores.size() * (1 - topPercent / 100.0)) - 1;
+        if (index < 0) index = 0;
+        return scores.get(index);
+    }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, noRollbackFor = DataIntegrityViolationException.class)
     public void checkSignalForNewBet(Bet newBet, Duration signalWindow, Duration cooldown) {
@@ -170,6 +209,77 @@ public class SignalDetectionService {
             }
         }
 
+        // 1. Получаем данные рынка для скоринга (Gamma API кешируется)
+        MarketDetailsDto market = null;
+        try {
+            market = gammaApiClient.getMarket(normalizedMarketId);
+        } catch (Exception e) {
+            log.warn("Cannot fetch market details for scoring: {}", e.getMessage());
+        }
+
+        double volume = 0.0;
+        double liquidity = 0.0;
+        double oppositeVolume = 0.0;
+
+        if (market != null) {
+            volume = market.getVolumeClob() != null ? market.getVolumeClob().doubleValue() : 0.0;
+            liquidity = market.getLiquidityClob() != null ? market.getLiquidityClob().doubleValue() : 0.0;
+            // Противоположный объём (можно использовать уже существующий метод или упрощённый вариант)
+            oppositeVolume = calculateOppositeVolume(market, normalizedOutcome).doubleValue();
+        }
+
+        // 2. Фактор свежести
+        Instant now = Instant.now();
+        long ageSeconds = stats.getLastBetAt() != null
+                ? Duration.between(stats.getLastBetAt(), now).toSeconds()
+                : 0;
+        double freshness = Math.exp(-ageSeconds / freshnessHalfLife);
+
+        // 3. Базовый счёт
+        double baseScore = stats.getTotalAmount().doubleValue()
+                * stats.getWhalesCount()
+                * Math.log10(volume + 1)
+                * Math.log10(liquidity + 1);
+
+        // Штраф за сильный перекос холдеров (опционально, но можно)
+        double penalty = 1.0;
+        if (oppositeVolume > 20000) {
+            penalty = 0.4;
+        } else if (oppositeVolume > 5000) {
+            penalty = 0.7;
+        }
+        double finalScore = baseScore * penalty * freshness;
+
+        // 4. Обновляем кэш недавних score
+        recentScores.put(UUID.randomUUID().toString(), finalScore);
+
+        // 5. Проверка дневного лимита
+        if (betsToday.get() >= maxBetsPerDay) {
+            log.info("Signal skipped: daily bet limit reached ({})", maxBetsPerDay);
+            return;
+        }
+
+        // 6. Проверка минимального интервала
+        long secondsSinceLastBet = Duration.between(lastBetTime, now).toSeconds();
+        if (secondsSinceLastBet < minIntervalMinutes * 60L) {
+            log.debug("Signal skipped: too soon after previous bet ({} sec < {} min)",
+                    secondsSinceLastBet, minIntervalMinutes);
+            return;
+        }
+
+        // 7. Динамический порог
+        double threshold = computeTopPercentile(topPercent);
+        if (finalScore < threshold) {
+            log.debug("Signal filtered by dynamic threshold: score {} < {}", finalScore, threshold);
+            return;
+        }
+
+        // Сигнал прошёл все фильтры – обновляем счётчики
+        betsToday.incrementAndGet();
+        lastBetTime = now;
+        log.info("Signal approved for betting: score={}, threshold={}, bet #{}, market={}",
+                finalScore, threshold, betsToday.get(), normalizedMarketId);
+
         Signal signal = new Signal();
         signal.setMarketId(normalizedMarketId);
         signal.setOutcome(normalizedOutcome);
@@ -181,6 +291,7 @@ public class SignalDetectionService {
 
         Instant signalTime = Objects.requireNonNullElse(stats.getLastBetAt(), to);
         signal.setCreatedAt(signalTime);
+        signal.setScore(finalScore);
 
         signal.setTelegramSent(false);
         signal.setPeriodHours(Math.toIntExact(signalWindow.toHours()));
@@ -438,6 +549,57 @@ public class SignalDetectionService {
         } catch (Exception e) {
             log.warn("Opposite holders check failed for marketId={}, outcome={}: {}", marketId, outcome, e.getMessage());
             return false;
+        }
+    }
+
+    private BigDecimal calculateOppositeVolume(MarketDetailsDto market, String outcome) {
+        if (market == null || outcome == null || outcome.isBlank()) {
+            return BigDecimal.ZERO;
+        }
+
+        List<String> outcomes = market.getOutcomes();
+        List<String> clobTokenIds = market.getClobTokenIds();
+
+        if (outcomes == null || outcomes.size() != 2 || clobTokenIds == null || clobTokenIds.size() != 2) {
+            return BigDecimal.ZERO;
+        }
+
+        int outcomeIndex = -1;
+        for (int i = 0; i < outcomes.size(); i++) {
+            if (outcomes.get(i) != null && outcomes.get(i).equalsIgnoreCase(outcome)) {
+                outcomeIndex = i;
+                break;
+            }
+        }
+        if (outcomeIndex == -1) {
+            String normalizedTarget = outcome.replaceAll("[^\\p{Alnum}]", "").toLowerCase(Locale.ROOT);
+            for (int i = 0; i < outcomes.size(); i++) {
+                String candidate = outcomes.get(i);
+                if (candidate == null) continue;
+                String normalizedCandidate = candidate.replaceAll("[^\\p{Alnum}]", "").toLowerCase(Locale.ROOT);
+                if (normalizedCandidate.contains(normalizedTarget) || normalizedTarget.contains(normalizedCandidate)) {
+                    outcomeIndex = i;
+                    break;
+                }
+            }
+        }
+        if (outcomeIndex == -1) return BigDecimal.ZERO;
+
+        int oppositeIndex = 1 - outcomeIndex;
+        String oppositeTokenId = clobTokenIds.get(oppositeIndex);
+        if (oppositeTokenId == null || oppositeTokenId.isBlank()) return BigDecimal.ZERO;
+
+        try {
+            BigDecimal volume = holdersApiClient.calculateOppositeOutcomeVolume(
+                    market.getMarketId(),
+                    oppositeTokenId,
+                    signalProperties.getOppositeHoldersLimit()
+            );
+            return volume != null ? volume : BigDecimal.ZERO;
+        } catch (Exception e) {
+            log.warn("Failed to get opposite volume for market={}, token={}: {}",
+                    market.getMarketId(), oppositeTokenId, e.getMessage());
+            return BigDecimal.ZERO;
         }
     }
 

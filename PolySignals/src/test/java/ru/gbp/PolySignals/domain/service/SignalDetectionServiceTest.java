@@ -4,22 +4,30 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import ru.gbp.PolySignals.client.polymarket.GammaApiClient;
 import ru.gbp.PolySignals.client.polymarket.HoldersApiClient;
@@ -37,47 +45,67 @@ import ru.gbp.PolySignals.domain.repository.SignalRepository;
 class SignalDetectionServiceTest {
 
     @Mock
-    BetRepository betRepository;
+    private BetRepository betRepository;
+
     @Mock
-    SignalRepository signalRepository;
+    private SignalRepository signalRepository;
+
     @Mock
-    ApplicationEventPublisher eventPublisher;
+    private ApplicationEventPublisher eventPublisher;
+
     @Mock
-    GammaApiClient gammaApiClient;
+    private GammaApiClient gammaApiClient;
+
     @Mock
-    HoldersApiClient holdersApiClient;
+    private HoldersApiClient holdersApiClient;
+
     @Mock
-    SignalProperties signalProperties;
+    private SignalProperties signalProperties;
 
     @InjectMocks
-    SignalDetectionService signalDetectionService;
+    private SignalDetectionService signalDetectionService;
 
     @BeforeEach
     void setUp() {
         lenient().when(signalRepository.saveAndFlush(any(Signal.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(signalRepository.findBySignalKey(anyString()))
+                .thenReturn(Optional.empty());
+
         lenient().when(betRepository.findDistinctWhaleNamesByMarketOutcomeAndTimeRange(anyString(), anyString(), any(), any()))
                 .thenReturn(List.of("whale1", "whale2"));
-        lenient().when(gammaApiClient.getMarket(anyString())).thenReturn(null);
+
+        lenient().when(betRepository.findMarketOutcomeSignalStats(anyString(), anyString(), any(), any()))
+                .thenReturn(new MarketOutcomeSignalStatsProjectionStub(
+                        "m1",
+                        "YES",
+                        2L,
+                        new BigDecimal("30"),
+                        Instant.parse("2026-01-01T09:00:00Z"),
+                        Instant.parse("2026-01-01T10:00:00Z")
+                ));
+
+        lenient().when(gammaApiClient.getMarket(anyString()))
+                .thenAnswer(invocation -> validBinaryMarket(invocation.getArgument(0, String.class)));
+
         lenient().when(holdersApiClient.calculateOppositeOutcomeVolume(anyString(), anyString(), anyInt()))
                 .thenReturn(BigDecimal.ZERO);
+
+        lenient().when(signalProperties.getMinTotalAmount()).thenReturn(BigDecimal.ZERO);
         lenient().when(signalProperties.getFilterOppositeHolders()).thenReturn(false);
+        lenient().when(signalProperties.getExcludedTitlePatterns()).thenReturn(null);
         lenient().when(signalProperties.getOppositeHoldersMinAmount()).thenReturn(new BigDecimal("1000"));
         lenient().when(signalProperties.getOppositeHoldersLimit()).thenReturn(20);
-        lenient().when(signalProperties.getMinTotalAmount()).thenReturn(BigDecimal.ZERO);
-        lenient().when(signalProperties.getExcludedTitlePatterns()).thenReturn(List.of());
+
+        ReflectionTestUtils.setField(signalDetectionService, "maxBetsPerDay", 1000);
+        ReflectionTestUtils.setField(signalDetectionService, "minIntervalMinutes", 0);
+        ReflectionTestUtils.setField(signalDetectionService, "topPercent", 100.0);
+        ReflectionTestUtils.setField(signalDetectionService, "freshnessHalfLife", 1_000_000L);
     }
 
     @Test
     void createsSignalWhenSecondWhaleAppearsInWindow() {
         Bet newBet = bet("m1", "yes", "whale2", "20", Instant.parse("2026-01-01T10:00:00Z"));
-
-        when(betRepository.findMarketOutcomeSignalStats(anyString(), anyString(), any(), any()))
-                .thenReturn(new MarketOutcomeSignalStatsProjectionStub(
-                        "m1", "yes", 2L, new BigDecimal("30"),
-                        Instant.parse("2026-01-01T09:00:00Z"),
-                        Instant.parse("2026-01-01T10:00:00Z")
-                ));
 
         ArgumentCaptor<Signal> signalCaptor = ArgumentCaptor.forClass(Signal.class);
 
@@ -89,28 +117,34 @@ class SignalDetectionServiceTest {
         Signal savedSignal = signalCaptor.getValue();
         assertThat(savedSignal.getMarketId()).isEqualTo("m1");
         assertThat(savedSignal.getOutcome()).isEqualTo("YES");
+        assertThat(savedSignal.getWhalesCount()).isEqualTo(2);
+        assertThat(savedSignal.getTotalAmount()).isEqualByComparingTo("30");
         assertThat(savedSignal.getSignalKey()).isNotBlank();
         assertThat(savedSignal.getFirstBetAt()).isEqualTo(Instant.parse("2026-01-01T09:00:00Z"));
         assertThat(savedSignal.getLastBetAt()).isEqualTo(Instant.parse("2026-01-01T10:00:00Z"));
+        assertThat(savedSignal.getCreatedAt()).isEqualTo(Instant.parse("2026-01-01T10:00:00Z"));
+        assertThat(savedSignal.getScore()).isNotNull();
+        assertThat(savedSignal.getWhaleLabels()).isNotNull();
     }
 
     @Test
     void doesNotCreateSignalWhenCooldownActive() {
         Bet newBet = bet("m1", "yes", "whale2", "20", Instant.parse("2026-01-01T10:00:00Z"));
 
-        when(betRepository.findMarketOutcomeSignalStats(anyString(), anyString(), any(), any()))
-                .thenReturn(new MarketOutcomeSignalStatsProjectionStub(
-                        "m1", "yes", 2L, new BigDecimal("30"),
-                        Instant.parse("2026-01-01T09:00:00Z"),
-                        Instant.parse("2026-01-01T10:00:00Z")
-                ));
+        AtomicBoolean saved = new AtomicBoolean(false);
+        when(signalRepository.findBySignalKey(anyString()))
+                .thenAnswer(invocation -> saved.get() ? Optional.of(new Signal()) : Optional.empty());
         when(signalRepository.saveAndFlush(any(Signal.class)))
-                .thenThrow(new DataIntegrityViolationException("duplicate key value violates unique constraint signal_key"));
+                .thenAnswer(invocation -> {
+                    saved.set(true);
+                    return invocation.getArgument(0);
+                });
 
         signalDetectionService.checkSignalForNewBet(newBet, Duration.ofDays(4), Duration.ofHours(6));
+        signalDetectionService.checkSignalForNewBet(newBet, Duration.ofDays(4), Duration.ofHours(6));
 
-        verify(signalRepository).saveAndFlush(any(Signal.class));
-        verifyNoInteractions(eventPublisher);
+        verify(signalRepository, times(1)).saveAndFlush(any(Signal.class));
+        verify(eventPublisher, times(1)).publishEvent(any(SignalCreatedEvent.class));
     }
 
     @Test
@@ -131,8 +165,6 @@ class SignalDetectionServiceTest {
         verifyNoInteractions(eventPublisher);
     }
 
-    // НОВЫЕ ТЕСТЫ ДЛЯ ФИЛЬТРАЦИИ ПО ПРОТИВОПОЛОЖНЫМ ХОЛДЕРАМ
-
     @Test
     void filtersBinaryMarketWhenOppositeHoldersExceedThreshold() {
         Bet newBet = bet("m1", "YES", "whale2", "20", Instant.parse("2026-01-01T10:00:00Z"));
@@ -144,10 +176,11 @@ class SignalDetectionServiceTest {
                         Instant.parse("2026-01-01T09:00:00Z"),
                         Instant.parse("2026-01-01T10:00:00Z")
                 ));
-        // Рынок бинарный: clobTokenIds содержит 2 токена
         MarketDetailsDto market = new MarketDetailsDto();
         market.setOutcomesRaw("[\"YES\",\"NO\"]");
         market.setClobTokenIdsRaw("[\"token-yes\",\"token-no\"]");
+        market.setVolumeClobRaw("100000");
+        market.setLiquidityClobRaw("50000");
         doReturn(market).when(gammaApiClient).getMarket("m1");
         when(holdersApiClient.calculateOppositeOutcomeVolume("m1", "token-no", 20))
                 .thenReturn(new BigDecimal("1500"));
@@ -172,6 +205,8 @@ class SignalDetectionServiceTest {
         MarketDetailsDto market = new MarketDetailsDto();
         market.setOutcomesRaw("[\"YES\",\"NO\"]");
         market.setClobTokenIdsRaw("[\"token-yes\",\"token-no\"]");
+        market.setVolumeClobRaw("100000");
+        market.setLiquidityClobRaw("50000");
         doReturn(market).when(gammaApiClient).getMarket("m1");
         when(holdersApiClient.calculateOppositeOutcomeVolume("m1", "token-no", 20))
                 .thenReturn(new BigDecimal("10"));
@@ -187,18 +222,7 @@ class SignalDetectionServiceTest {
         Bet newBet = bet("m1", "YES", "whale2", "20", Instant.parse("2026-01-01T10:00:00Z"));
 
         when(signalProperties.getFilterOppositeHolders()).thenReturn(true);
-        when(betRepository.findMarketOutcomeSignalStats(anyString(), anyString(), any(), any()))
-                .thenReturn(new MarketOutcomeSignalStatsProjectionStub(
-                        "m1", "YES", 2L, new BigDecimal("2000"),
-                        Instant.parse("2026-01-01T09:00:00Z"),
-                        Instant.parse("2026-01-01T10:00:00Z")
-                ));
-        // Рынок не бинарный: clobTokenIds содержит 3 токена
-        MarketDetailsDto market = new MarketDetailsDto();
-        market.setOutcomesRaw("[\"Team A\",\"Team B\",\"Team C\"]");
-        market.setClobTokenIdsRaw("[\"token-a\",\"token-b\",\"token-c\"]");
-        doReturn(market).when(gammaApiClient).getMarket("m1");
-        assertThat(market.getClobTokenIds()).containsExactly("token-a", "token-b", "token-c");
+        doReturn(nonBinaryMarket("m1")).when(gammaApiClient).getMarket("m1");
 
         signalDetectionService.checkSignalForNewBet(newBet, Duration.ofDays(4), Duration.ofHours(6));
 
@@ -212,16 +236,7 @@ class SignalDetectionServiceTest {
         Bet newBet = bet("m1", "YES", "whale2", "20", Instant.parse("2026-01-01T10:00:00Z"));
 
         when(signalProperties.getFilterOppositeHolders()).thenReturn(true);
-        when(betRepository.findMarketOutcomeSignalStats(anyString(), anyString(), any(), any()))
-                .thenReturn(new MarketOutcomeSignalStatsProjectionStub(
-                        "m1", "YES", 2L, new BigDecimal("2000"),
-                        Instant.parse("2026-01-01T09:00:00Z"),
-                        Instant.parse("2026-01-01T10:00:00Z")
-                ));
-        MarketDetailsDto market = new MarketDetailsDto();
-        market.setClobTokenIdsRaw(null);
-        when(gammaApiClient.getMarket("m1")).thenReturn(market);
-        assertThat(market.getClobTokenIds()).isEmpty();
+        doReturn(marketWithoutClobTokenIds("m1")).when(gammaApiClient).getMarket("m1");
 
         signalDetectionService.checkSignalForNewBet(newBet, Duration.ofDays(4), Duration.ofHours(6));
 
@@ -230,7 +245,91 @@ class SignalDetectionServiceTest {
         verify(eventPublisher).publishEvent(any(SignalCreatedEvent.class));
     }
 
-    // Вспомогательные методы
+    @Test
+    void signalBlockedByDailyLimit() {
+        Bet newBet = bet("m1", "yes", "whale2", "20", Instant.parse("2026-01-01T10:00:00Z"));
+
+        ReflectionTestUtils.setField(signalDetectionService, "maxBetsPerDay", 0);
+
+        signalDetectionService.checkSignalForNewBet(newBet, Duration.ofDays(4), Duration.ofHours(6));
+
+        verify(signalRepository, never()).saveAndFlush(any(Signal.class));
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void signalBlockedByMinInterval() {
+        ReflectionTestUtils.setField(signalDetectionService, "minIntervalMinutes", 60);
+
+        Bet firstBet = bet("m1", "yes", "whale1", "20", Instant.parse("2026-01-01T10:00:00Z"));
+        Bet secondBet = bet("m2", "yes", "whale2", "20", Instant.parse("2026-01-01T10:10:00Z"));
+
+        when(betRepository.findMarketOutcomeSignalStats(anyString(), anyString(), any(), any()))
+                .thenReturn(
+                        new MarketOutcomeSignalStatsProjectionStub(
+                                "m1",
+                                "YES",
+                                2L,
+                                new BigDecimal("30"),
+                                Instant.parse("2026-01-01T09:00:00Z"),
+                                Instant.parse("2026-01-01T10:00:00Z")
+                        ),
+                        new MarketOutcomeSignalStatsProjectionStub(
+                                "m2",
+                                "YES",
+                                2L,
+                                new BigDecimal("30"),
+                                Instant.parse("2026-01-01T10:00:00Z"),
+                                Instant.parse("2026-01-01T10:10:00Z")
+                        )
+                );
+
+        doReturn(validBinaryMarket("m1")).when(gammaApiClient).getMarket("m1");
+        doReturn(validBinaryMarket("m2")).when(gammaApiClient).getMarket("m2");
+
+        signalDetectionService.checkSignalForNewBet(firstBet, Duration.ofDays(4), Duration.ofHours(6));
+        signalDetectionService.checkSignalForNewBet(secondBet, Duration.ofDays(4), Duration.ofHours(6));
+
+        verify(signalRepository, times(1)).saveAndFlush(any(Signal.class));
+        verify(eventPublisher, times(1)).publishEvent(any(SignalCreatedEvent.class));
+    }
+
+    @Test
+    void signalFilteredByDynamicThreshold() {
+        ReflectionTestUtils.setField(signalDetectionService, "topPercent", 0.0);
+
+        Bet firstBet = bet("m1", "yes", "whale1", "1000", Instant.parse("2026-01-01T10:00:00Z"));
+        Bet secondBet = bet("m2", "yes", "whale2", "1", Instant.parse("2026-01-01T10:05:00Z"));
+
+        when(betRepository.findMarketOutcomeSignalStats(anyString(), anyString(), any(), any()))
+                .thenReturn(
+                        new MarketOutcomeSignalStatsProjectionStub(
+                                "m1",
+                                "YES",
+                                2L,
+                                new BigDecimal("1000"),
+                                Instant.parse("2026-01-01T09:00:00Z"),
+                                Instant.parse("2026-01-01T10:00:00Z")
+                        ),
+                        new MarketOutcomeSignalStatsProjectionStub(
+                                "m2",
+                                "YES",
+                                2L,
+                                new BigDecimal("1"),
+                                Instant.parse("2026-01-01T10:00:00Z"),
+                                Instant.parse("2026-01-01T10:05:00Z")
+                        )
+                );
+
+        doReturn(validBinaryMarket("m1")).when(gammaApiClient).getMarket("m1");
+        doReturn(lowScoreMarket("m2")).when(gammaApiClient).getMarket("m2");
+
+        signalDetectionService.checkSignalForNewBet(firstBet, Duration.ofDays(4), Duration.ofHours(6));
+        signalDetectionService.checkSignalForNewBet(secondBet, Duration.ofDays(4), Duration.ofHours(6));
+
+        verify(signalRepository, times(1)).saveAndFlush(any(Signal.class));
+        verify(eventPublisher, times(1)).publishEvent(any(SignalCreatedEvent.class));
+    }
 
     private Bet bet(String marketId, String outcome, String whaleId, String amount, Instant time) {
         Bet bet = new Bet();
@@ -247,6 +346,50 @@ class SignalDetectionServiceTest {
         bet.setWhale(whale);
 
         return bet;
+    }
+
+    private MarketDetailsDto validBinaryMarket(String marketId) {
+        MarketDetailsDto market = new MarketDetailsDto();
+        market.setQuestion("Question " + marketId);
+        market.setSlug("slug-" + marketId);
+        market.setOutcomesRaw("[\"YES\",\"NO\"]");
+        market.setClobTokenIdsRaw("[\"token-yes\",\"token-no\"]");
+        market.setVolumeClobRaw("100000");
+        market.setLiquidityClobRaw("50000");
+        return market;
+    }
+
+    private MarketDetailsDto lowScoreMarket(String marketId) {
+        MarketDetailsDto market = new MarketDetailsDto();
+        market.setQuestion("Question " + marketId);
+        market.setSlug("slug-" + marketId);
+        market.setOutcomesRaw("[\"YES\",\"NO\"]");
+        market.setClobTokenIdsRaw("[\"token-yes\",\"token-no\"]");
+        market.setVolumeClobRaw(null);
+        market.setLiquidityClobRaw(null);
+        return market;
+    }
+
+    private MarketDetailsDto nonBinaryMarket(String marketId) {
+        MarketDetailsDto market = new MarketDetailsDto();
+        market.setQuestion("Question " + marketId);
+        market.setSlug("slug-" + marketId);
+        market.setOutcomesRaw("[\"Team A\",\"Team B\",\"Team C\"]");
+        market.setClobTokenIdsRaw("[\"token-a\",\"token-b\",\"token-c\"]");
+        market.setVolumeClobRaw("100000");
+        market.setLiquidityClobRaw("50000");
+        return market;
+    }
+
+    private MarketDetailsDto marketWithoutClobTokenIds(String marketId) {
+        MarketDetailsDto market = new MarketDetailsDto();
+        market.setQuestion("Question " + marketId);
+        market.setSlug("slug-" + marketId);
+        market.setOutcomesRaw("[\"YES\",\"NO\"]");
+        market.setClobTokenIdsRaw(null);
+        market.setVolumeClobRaw("100000");
+        market.setLiquidityClobRaw("50000");
+        return market;
     }
 
     private static final class MarketOutcomeSignalStatsProjectionStub implements MarketOutcomeSignalProjection {

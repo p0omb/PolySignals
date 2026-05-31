@@ -90,7 +90,8 @@ public class GammaApiClient {
         try {
             MarketDetailsDto result = polymarketRetryTemplate.execute(context -> {
                 // 1. Запрос к Data API
-                List<MarketDetailsDto> markets = gammaApiWebClient.get()
+                try {
+                    List<MarketDetailsDto> markets = gammaApiWebClient.get()
                         .uri(uriBuilder -> uriBuilder
                                 .path(MARKETS_ENDPOINT)
                                 .queryParam("condition_ids", requestedId) // <-- используем condition_ids без []
@@ -110,25 +111,30 @@ public class GammaApiClient {
                         .bodyToMono(new ParameterizedTypeReference<List<MarketDetailsDto>>() {})
                         .block();
 
-                // 2. Обработка ответа
-                if (markets == null || markets.isEmpty()) {
-                    log.warn("Data API returned empty or null response for condition_id={}", requestedId);
-                    return null;
-                }
+                    // 2. Обработка ответа
+                    if (markets == null || markets.isEmpty()) {
+                        log.warn("Data API returned empty or null response for condition_id={}", requestedId);
+                        return null;
+                    }
 
-                if (markets.size() > 1) {
-                    log.warn("Data API returned {} markets for condition_id={}, using the first one.", markets.size(), requestedId);
-                }
+                    if (markets.size() > 1) {
+                        log.warn("Data API returned {} markets for condition_id={}, using the first one.", markets.size(), requestedId);
+                    }
 
-                MarketDetailsDto market = markets.get(0);
-                if (market.getClobTokenIds().isEmpty()) {
-                    log.warn("Market found in Data API, but clob_token_ids is empty for condition_id={}", requestedId);
-                }
+                    MarketDetailsDto market = markets.get(0);
+                    if (market.getClobTokenIds().isEmpty()) {
+                        log.warn("Market found in Data API, but clob_token_ids is empty for condition_id={}", requestedId);
+                    }
 
-                // 3. Кешируем и возвращаем результат
-                marketCache.put(cacheKey, market);
-                log.info("Successfully fetched market from Data API for condition_id={}. Tokens: {}", requestedId, market.getClobTokenIds());
-                return market;
+                    // 3. Кешируем и возвращаем результат
+                    marketCache.put(cacheKey, market);
+                    log.info("Successfully fetched market from Data API for condition_id={}. Tokens: {}", requestedId, market.getClobTokenIds());
+                    return market;
+                } catch (Throwable t) {
+                    // log attempt failure so we can see why RetryTemplate may or may not retry
+                    log.warn("Attempt to fetch market failed for condition_id={} with {}, message={}", requestedId, t.getClass().getName(), t.getMessage());
+                    throw t;
+                }
 
             }, context -> {
                 log.error("Data API failed for condition_id={} after retries, returning null", requestedId);

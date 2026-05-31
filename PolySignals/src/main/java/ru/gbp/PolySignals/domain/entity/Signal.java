@@ -67,4 +67,22 @@ public class Signal {
 
     @Column(name = "slug")
     private String slug;
+
+    @Column(name = "score")
+    private Double score;
+
+    @Column(name = "market_volume")
+    private BigDecimal marketVolume;
+
+    @Column(name = "market_liquidity")
+    private BigDecimal marketLiquidity;
+
+    @Column(name = "opposite_volume")
+    private BigDecimal oppositeVolume;
+
+    @Column(name = "token_id")
+    private String tokenId;
+
+    @Column(name = "auto_bet_placed", nullable = false)
+    private Boolean autoBetPlaced = false;
 }

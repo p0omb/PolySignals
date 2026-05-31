@@ -1,5 +1,6 @@
 package ru.gbp.PolySignals.client.polymarket;
 
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,7 @@ import org.springframework.retry.support.RetryTemplate;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+import org.springframework.test.util.ReflectionTestUtils;
 import ru.gbp.PolySignals.client.polymarket.dto.MarketDetailsDto;
 
 import java.util.HashMap;
@@ -36,20 +38,20 @@ class GammaApiClientTest {
                 .baseUrl(wiremock.getRuntimeInfo().getHttpBaseUrl())
                 .build();
 
-        gammaApiClient = new GammaApiClient(webClient, retryTemplate(3));
+        gammaApiClient = new GammaApiClient(webClient, retryTemplate());
+        ReflectionTestUtils.setField(gammaApiClient, "marketCache", Caffeine.newBuilder().build());
     }
+
 
     @Test
     void getMarket_returnsMarketDetails_whenApiRespondsOk() {
-        // Используем "conditionId" — точное имя свойства в DTO
         wiremock.stubFor(get(urlPathEqualTo("/markets"))
                 .withQueryParam("condition_ids", equalTo("m1"))
-                .willReturn(okJson("[{\"conditionId\":\"m1\",\"question\":\"Q\",\"slug\":\"q\",\"clob_token_ids\":\"[\\\"t1\\\",\\\"t2\\\"]\"}]")));
+                .willReturn(okJson("[{\"conditionId\":\"m1\",\"question\":\"Q\",\"slug\":\"q\",\"clobTokenIds\":\"[\\\"t1\\\",\\\"t2\\\"]\",\"outcomes\":\"[\\\"Yes\\\",\\\"No\\\"]\"}]")));
 
         MarketDetailsDto result = gammaApiClient.getMarket("m1");
-
         assertNotNull(result);
-        assertEquals("m1", result.getConditionId());
+        assertEquals("Q", result.getQuestion());
         assertEquals("q", result.getSlug());
         assertFalse(result.getClobTokenIds().isEmpty());
         assertEquals("t1", result.getClobTokenIds().get(0));
@@ -67,25 +69,23 @@ class GammaApiClientTest {
                 .whenScenarioStateIs(STARTED)
                 .willReturn(serverError())
                 .willSetStateTo("SECOND"));
-
         wiremock.stubFor(get(urlPathEqualTo("/markets"))
                 .withQueryParam("condition_ids", equalTo("m2"))
                 .inScenario("gamma-retry-500")
                 .whenScenarioStateIs("SECOND")
                 .willReturn(serverError())
                 .willSetStateTo("SUCCESS"));
-
         wiremock.stubFor(get(urlPathEqualTo("/markets"))
                 .withQueryParam("condition_ids", equalTo("m2"))
                 .inScenario("gamma-retry-500")
                 .whenScenarioStateIs("SUCCESS")
-                .willReturn(okJson("[{\"conditionId\":\"m2\",\"question\":\"Q2\",\"slug\":\"q2\",\"clob_token_ids\":\"[\\\"token-yes\\\",\\\"token-no\\\"]\"}]")));
+                .willReturn(okJson("[{\"conditionId\":\"m2\",\"question\":\"Q2\",\"slug\":\"q2\",\"clobTokenIds\":\"[\\\"token-yes\\\",\\\"token-no\\\"]\",\"outcomes\":\"[\\\"Yes\\\",\\\"No\\\"]\"}]")));
 
         MarketDetailsDto result = gammaApiClient.getMarket("m2");
-
         assertNotNull(result);
-        assertEquals("m2", result.getConditionId());
-        assertTrue(result.getClobTokenIds().size() == 2);
+        assertEquals("Q2", result.getQuestion());
+        assertEquals("q2", result.getSlug());
+        assertEquals(2, result.getClobTokenIds().size());
 
         wiremock.verify(3, getRequestedFor(urlPathEqualTo("/markets"))
                 .withQueryParam("condition_ids", equalTo("m2")));
@@ -99,18 +99,17 @@ class GammaApiClientTest {
                 .whenScenarioStateIs(STARTED)
                 .willReturn(aResponse().withStatus(429))
                 .willSetStateTo("SUCCESS"));
-
         wiremock.stubFor(get(urlPathEqualTo("/markets"))
                 .withQueryParam("condition_ids", equalTo("m3"))
                 .inScenario("gamma-retry-429")
                 .whenScenarioStateIs("SUCCESS")
-                .willReturn(okJson("[{\"conditionId\":\"m3\",\"question\":\"Q3\",\"slug\":\"q3\",\"clob_token_ids\":\"[\\\"token-yes\\\",\\\"token-no\\\"]\"}]")));
+                .willReturn(okJson("[{\"conditionId\":\"m3\",\"question\":\"Q3\",\"slug\":\"q3\",\"clobTokenIds\":\"[\\\"token-yes\\\",\\\"token-no\\\"]\",\"outcomes\":\"[\\\"Yes\\\",\\\"No\\\"]\"}]")));
 
         MarketDetailsDto result = gammaApiClient.getMarket("m3");
-
         assertNotNull(result);
-        assertEquals("m3", result.getConditionId());
-        assertTrue(result.getClobTokenIds().size() == 2);
+        assertEquals("Q3", result.getQuestion());
+        assertEquals("q3", result.getSlug());
+        assertEquals(2, result.getClobTokenIds().size());
 
         wiremock.verify(2, getRequestedFor(urlPathEqualTo("/markets"))
                 .withQueryParam("condition_ids", equalTo("m3")));
@@ -122,7 +121,6 @@ class GammaApiClientTest {
                 .withQueryParam("condition_ids", equalTo("m404"))
                 .willReturn(aResponse().withStatus(404).withBody("not found")));
 
-        // Теперь клиент возвращает null вместо исключения, так как все ошибки глушатся
         MarketDetailsDto result = gammaApiClient.getMarket("m404");
         assertNull(result);
 
@@ -135,14 +133,12 @@ class GammaApiClientTest {
         assertThrows(IllegalArgumentException.class, () -> gammaApiClient.getMarket(" "));
     }
 
-    private RetryTemplate retryTemplate(int maxAttempts) {
+    private RetryTemplate retryTemplate() {
         RetryTemplate template = new RetryTemplate();
-
         Map<Class<? extends Throwable>, Boolean> retryable = new HashMap<>();
         retryable.put(WebClientRequestException.class, true);
         retryable.put(WebClientResponseException.class, true);
-
-        template.setRetryPolicy(new SimpleRetryPolicy(maxAttempts, retryable, true) {
+        template.setRetryPolicy(new SimpleRetryPolicy(3, retryable, true) {
             @Override
             public boolean canRetry(RetryContext context) {
                 Throwable t = context.getLastThrowable();

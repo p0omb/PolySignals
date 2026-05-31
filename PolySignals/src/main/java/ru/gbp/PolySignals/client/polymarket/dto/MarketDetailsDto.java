@@ -6,20 +6,22 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 @Data
 @NoArgsConstructor
-@AllArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class MarketDetailsDto {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+
 
     @JsonProperty("id")
     private String marketId;
@@ -65,14 +67,6 @@ public class MarketDetailsDto {
         return parseToStringList(outcomesRaw);
     }
 
-    /**
-     * Compatibility helper for existing code.
-     */
-    @JsonIgnore
-    public String getConditionId() {
-        return this.conditionId;
-    }
-
     private List<String> parseToStringList(Object raw) {
         if (raw == null) {
             return Collections.emptyList();
@@ -81,7 +75,7 @@ public class MarketDetailsDto {
         try {
             if (raw instanceof List<?> list) {
                 return list.stream()
-                        .filter(item -> item != null)
+                        .filter(Objects::nonNull)
                         .map(Object::toString)
                         .toList();
             }
@@ -92,12 +86,36 @@ public class MarketDetailsDto {
             }
 
             if (value.startsWith("[")) {
-                return OBJECT_MAPPER.readValue(value, new TypeReference<List<String>>() {});
+                return OBJECT_MAPPER.readValue(value, new TypeReference<>() {});
             }
 
             return List.of(value);
         } catch (Exception ignored) {
             return Collections.emptyList();
+        }
+    }
+
+    @JsonAlias({"volumeClob", "volume", "volumeNum"})
+    private String volumeClobRaw;
+
+    public BigDecimal getVolumeClob() {
+        if (volumeClobRaw == null) return BigDecimal.ZERO;
+        try {
+            return new BigDecimal(volumeClobRaw);
+        } catch (NumberFormatException e) {
+            return BigDecimal.ZERO;
+        }
+    }
+
+    @JsonAlias({"liquidityClob", "liquidity", "liquidityNum"})
+    private String liquidityClobRaw;
+
+    public BigDecimal getLiquidityClob() {
+        if (liquidityClobRaw == null) return BigDecimal.ZERO;
+        try {
+            return new BigDecimal(liquidityClobRaw);
+        } catch (NumberFormatException e) {
+            return BigDecimal.ZERO;
         }
     }
 }
