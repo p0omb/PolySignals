@@ -71,7 +71,7 @@ public class GammaApiClient {
     public MarketDetailsDto getMarket(String marketId) {
         ensureCacheInitialized();
 
-        log.info("Getting market details from Data API for condition_id={}", marketId);
+        log.info("GammaApiClient.getMarket called for marketId={}", marketId);
 
         if (marketId == null || marketId.isBlank()) {
             throw new IllegalArgumentException("marketId must not be blank");
@@ -89,12 +89,11 @@ public class GammaApiClient {
 
         try {
             MarketDetailsDto result = polymarketRetryTemplate.execute(context -> {
-                // 1. Запрос к Data API
-                try {
-                    List<MarketDetailsDto> markets = gammaApiWebClient.get()
+                log.debug("Executing Gamma API request for condition_id={}", requestedId);
+                List<MarketDetailsDto> markets = gammaApiWebClient.get()
                         .uri(uriBuilder -> uriBuilder
                                 .path(MARKETS_ENDPOINT)
-                                .queryParam("condition_ids", requestedId) // <-- используем condition_ids без []
+                                .queryParam("condition_ids", requestedId) // без скобок!
                                 .build())
                         .retrieve()
                         .onStatus(this::isRetryableStatus, response ->
@@ -111,43 +110,43 @@ public class GammaApiClient {
                         .bodyToMono(new ParameterizedTypeReference<List<MarketDetailsDto>>() {})
                         .block();
 
-                    // 2. Обработка ответа
-                    if (markets == null || markets.isEmpty()) {
-                        log.warn("Data API returned empty or null response for condition_id={}", requestedId);
-                        return null;
-                    }
+                log.info("Gamma API response for condition_id={}: number of markets = {}",
+                        requestedId, markets != null ? markets.size() : 0);
 
-                    if (markets.size() > 1) {
-                        log.warn("Data API returned {} markets for condition_id={}, using the first one.", markets.size(), requestedId);
-                    }
-
-                    MarketDetailsDto market = markets.get(0);
-                    if (market.getClobTokenIds().isEmpty()) {
-                        log.warn("Market found in Data API, but clob_token_ids is empty for condition_id={}", requestedId);
-                    }
-
-                    // 3. Кешируем и возвращаем результат
-                    marketCache.put(cacheKey, market);
-                    log.info("Successfully fetched market from Data API for condition_id={}. Tokens: {}", requestedId, market.getClobTokenIds());
-                    return market;
-                } catch (Throwable t) {
-                    // log attempt failure so we can see why RetryTemplate may or may not retry
-                    log.warn("Attempt to fetch market failed for condition_id={} with {}, message={}", requestedId, t.getClass().getName(), t.getMessage());
-                    throw t;
+                if (markets == null || markets.isEmpty()) {
+                    log.warn("Gamma API returned empty or null response for condition_id={}", requestedId);
+                    return null;
                 }
 
+                // Если рынков несколько, всё равно берём первый (обычно он один)
+                MarketDetailsDto market = markets.get(0);
+                log.info("Using first market from response: conditionId={}, question='{}', outcomes={}, tokenIds={}",
+                        market.getConditionId(),
+                        market.getQuestion(),
+                        market.getOutcomes(),
+                        market.getClobTokenIds());
+
+                if (market.getClobTokenIds().isEmpty()) {
+                    log.warn("Market found, but clob_token_ids is empty for condition_id={}", requestedId);
+                }
+
+                // Кешируем и возвращаем
+                marketCache.put(cacheKey, market);
+                log.info("Successfully fetched and cached market for condition_id={}. Tokens: {}",
+                        requestedId, market.getClobTokenIds());
+                return market;
+
             }, context -> {
-                log.error("Data API failed for condition_id={} after retries, returning null", requestedId);
+                log.error("Gamma API failed for condition_id={} after retries, returning null", requestedId);
                 return null;
             });
 
             return result;
         } catch (Exception ex) {
-            log.error("Data API unexpected error for condition_id={}: {}", requestedId, ex.getMessage(), ex);
+            log.error("Gamma API unexpected error for condition_id={}: {}", requestedId, ex.getMessage(), ex);
             return null;
         }
     }
-
     private boolean isRetryableStatus(HttpStatusCode statusCode) {
         return statusCode.value() == 429 || statusCode.is5xxServerError();
     }
