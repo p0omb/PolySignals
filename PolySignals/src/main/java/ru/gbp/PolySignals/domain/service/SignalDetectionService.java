@@ -293,6 +293,44 @@ public class SignalDetectionService {
         signal.setCreatedAt(signalTime);
         signal.setScore(finalScore);
 
+        // Заполняем token_id и рыночные метрики
+        if (market != null) {
+            signal.setMarketVolume(BigDecimal.valueOf(volume));
+            signal.setMarketLiquidity(BigDecimal.valueOf(liquidity));
+            signal.setOppositeVolume(BigDecimal.valueOf(oppositeVolume));
+
+            // Находим token_id для выбранного исхода
+            List<String> outcomes = market.getOutcomes();
+            List<String> tokenIds = market.getClobTokenIds();
+            if (outcomes != null && tokenIds != null && outcomes.size() == tokenIds.size()) {
+                String targetOutcome = normalizedOutcome; // уже в верхнем регистре
+                int idx = -1;
+                // сначала точное совпадение
+                for (int i = 0; i < outcomes.size(); i++) {
+                    if (targetOutcome.equalsIgnoreCase(outcomes.get(i).trim())) {
+                        idx = i;
+                        break;
+                    }
+                }
+                // если нет — частичное совпадение (для спортивных названий)
+                if (idx == -1) {
+                    String normTarget = targetOutcome.replaceAll("[^\\p{Alnum}]", "").toLowerCase();
+                    for (int i = 0; i < outcomes.size(); i++) {
+                        String normCandidate = outcomes.get(i).replaceAll("[^\\p{Alnum}]", "").toLowerCase();
+                        if (normCandidate.contains(normTarget) || normTarget.contains(normCandidate)) {
+                            idx = i;
+                            break;
+                        }
+                    }
+                }
+                if (idx >= 0 && idx < tokenIds.size()) {
+                    signal.setTokenId(tokenIds.get(idx));
+                } else {
+                    log.warn("Could not determine token_id for outcome={} in market={}", normalizedOutcome, normalizedMarketId);
+                }
+            }
+        }
+
         signal.setTelegramSent(false);
         signal.setPeriodHours(Math.toIntExact(signalWindow.toHours()));
         signal.setWhaleLabels(whaleLabels);
