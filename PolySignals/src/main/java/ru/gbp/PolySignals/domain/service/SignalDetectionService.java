@@ -67,7 +67,7 @@ public class SignalDetectionService {
     @Value("${signal.freshness.half.life.seconds:300}")
     private double freshnessHalfLife;
 
-    @Scheduled(cron = "0 0 10 * * *")
+    @Scheduled(cron = "0 0 10 * * *", zone = "Europe/Moscow" )
     public void resetDailyBets() {
         int prev = betsToday.getAndSet(0);
         log.info("Daily bet counter reset, previous: {}", prev);
