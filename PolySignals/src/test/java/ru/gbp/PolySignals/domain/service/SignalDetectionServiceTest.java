@@ -82,8 +82,12 @@ class SignalDetectionServiceTest {
                         2L,
                         new BigDecimal("30"),
                         Instant.parse("2026-01-01T09:00:00Z"),
-                        Instant.parse("2026-01-01T10:00:00Z")
+                        Instant.parse("2026-01-01T10:00:00Z"),
+                        2.0   // whaleWeight достаточный для прохождения MIN_WHALE_WEIGHT (1.5)
                 ));
+
+        lenient().when(betRepository.getTotalWhaleWeight(anyString(), anyString(), any(), any()))
+                .thenReturn(2.0);
 
         lenient().when(gammaApiClient.getMarket(anyString()))
                 .thenAnswer(invocation -> validBinaryMarket(invocation.getArgument(0, String.class)));
@@ -101,6 +105,7 @@ class SignalDetectionServiceTest {
         ReflectionTestUtils.setField(signalDetectionService, "minIntervalMinutes", 0);
         ReflectionTestUtils.setField(signalDetectionService, "topPercent", 100.0);
         ReflectionTestUtils.setField(signalDetectionService, "freshnessHalfLife", 1_000_000L);
+        ReflectionTestUtils.setField(signalDetectionService, "whaleWeightFilterEnabled", true);
     }
 
     @Test
@@ -125,6 +130,7 @@ class SignalDetectionServiceTest {
         assertThat(savedSignal.getCreatedAt()).isEqualTo(Instant.parse("2026-01-01T10:00:00Z"));
         assertThat(savedSignal.getScore()).isNotNull();
         assertThat(savedSignal.getWhaleLabels()).isNotNull();
+        assertThat(savedSignal.getWhaleWeight()).isEqualTo(2.0);
     }
 
     @Test
@@ -155,7 +161,8 @@ class SignalDetectionServiceTest {
                 .thenReturn(new MarketOutcomeSignalStatsProjectionStub(
                         "m1", "yes", 1L, new BigDecimal("1"),
                         Instant.parse("2026-01-01T09:00:00Z"),
-                        Instant.parse("2026-01-01T10:00:00Z")
+                        Instant.parse("2026-01-01T10:00:00Z"),
+                        0.5   // низкий вес не влияет, т.к. whalesCount < MIN_WHALES
                 ));
 
         signalDetectionService.checkSignalForNewBet(newBet, Duration.ofDays(4), Duration.ofHours(6));
@@ -174,13 +181,12 @@ class SignalDetectionServiceTest {
                 .thenReturn(new MarketOutcomeSignalStatsProjectionStub(
                         "m1", "YES", 2L, new BigDecimal("2000"),
                         Instant.parse("2026-01-01T09:00:00Z"),
-                        Instant.parse("2026-01-01T10:00:00Z")
+                        Instant.parse("2026-01-01T10:00:00Z"),
+                        2.0
                 ));
         MarketDetailsDto market = new MarketDetailsDto();
         market.setOutcomesRaw("[\"YES\",\"NO\"]");
         market.setClobTokenIdsRaw("[\"token-yes\",\"token-no\"]");
-        market.setVolumeClobRaw("100000");
-        market.setLiquidityClobRaw("50000");
         doReturn(market).when(gammaApiClient).getMarket("m1");
         when(holdersApiClient.calculateOppositeOutcomeVolume("m1", "token-no", 20))
                 .thenReturn(new BigDecimal("1500"));
@@ -200,7 +206,8 @@ class SignalDetectionServiceTest {
                 .thenReturn(new MarketOutcomeSignalStatsProjectionStub(
                         "m1", "YES", 2L, new BigDecimal("2000"),
                         Instant.parse("2026-01-01T09:00:00Z"),
-                        Instant.parse("2026-01-01T10:00:00Z")
+                        Instant.parse("2026-01-01T10:00:00Z"),
+                        2.0
                 ));
         MarketDetailsDto market = new MarketDetailsDto();
         market.setOutcomesRaw("[\"YES\",\"NO\"]");
@@ -272,7 +279,8 @@ class SignalDetectionServiceTest {
                                 2L,
                                 new BigDecimal("30"),
                                 Instant.parse("2026-01-01T09:00:00Z"),
-                                Instant.parse("2026-01-01T10:00:00Z")
+                                Instant.parse("2026-01-01T10:00:00Z"),
+                                2.0
                         ),
                         new MarketOutcomeSignalStatsProjectionStub(
                                 "m2",
@@ -280,7 +288,8 @@ class SignalDetectionServiceTest {
                                 2L,
                                 new BigDecimal("30"),
                                 Instant.parse("2026-01-01T10:00:00Z"),
-                                Instant.parse("2026-01-01T10:10:00Z")
+                                Instant.parse("2026-01-01T10:10:00Z"),
+                                2.0
                         )
                 );
 
@@ -309,7 +318,8 @@ class SignalDetectionServiceTest {
                                 2L,
                                 new BigDecimal("1000"),
                                 Instant.parse("2026-01-01T09:00:00Z"),
-                                Instant.parse("2026-01-01T10:00:00Z")
+                                Instant.parse("2026-01-01T10:00:00Z"),
+                                2.0
                         ),
                         new MarketOutcomeSignalStatsProjectionStub(
                                 "m2",
@@ -317,7 +327,8 @@ class SignalDetectionServiceTest {
                                 2L,
                                 new BigDecimal("1"),
                                 Instant.parse("2026-01-01T10:00:00Z"),
-                                Instant.parse("2026-01-01T10:05:00Z")
+                                Instant.parse("2026-01-01T10:05:00Z"),
+                                2.0
                         )
                 );
 
@@ -399,6 +410,7 @@ class SignalDetectionServiceTest {
         private final BigDecimal totalAmount;
         private final Instant firstBetAt;
         private final Instant lastBetAt;
+        private final Double whaleWeight;
 
         private MarketOutcomeSignalStatsProjectionStub(
                 String marketId,
@@ -406,14 +418,15 @@ class SignalDetectionServiceTest {
                 Long whalesCount,
                 BigDecimal totalAmount,
                 Instant firstBetAt,
-                Instant lastBetAt
-        ) {
+                Instant lastBetAt,
+                Double whaleWeight) {
             this.marketId = marketId;
             this.outcome = outcome;
             this.whalesCount = whalesCount;
             this.totalAmount = totalAmount;
             this.firstBetAt = firstBetAt;
             this.lastBetAt = lastBetAt;
+            this.whaleWeight = whaleWeight;
         }
 
         @Override
@@ -444,6 +457,11 @@ class SignalDetectionServiceTest {
         @Override
         public Instant getLastBetAt() {
             return lastBetAt;
+        }
+
+        @Override
+        public Double getWhaleWeight() {
+            return whaleWeight;
         }
     }
 }

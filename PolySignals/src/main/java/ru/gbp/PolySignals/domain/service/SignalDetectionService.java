@@ -38,6 +38,7 @@ import java.util.stream.Collectors;
 public class SignalDetectionService {
 
     private static final int MIN_WHALES = 2;
+    private static final double MIN_WHALE_WEIGHT = 1.5;
     private final AtomicReference<Instant> lastDetectAndSendAt = new AtomicReference<>();
 
     private final BetRepository betRepository;
@@ -67,7 +68,13 @@ public class SignalDetectionService {
     @Value("${signal.freshness.half.life.seconds:300}")
     private double freshnessHalfLife;
 
-    @Scheduled(cron = "0 0 10 * * *", zone = "Europe/Moscow" )
+    @Value("${signal.filter.whale.weight.enabled:false}")
+    private boolean whaleWeightFilterEnabled;
+
+    @Value("${signal.min.whale.weight:1.5}")
+    private double minWhaleWeight;
+
+    @Scheduled(cron = "0 0 10 * * *", zone = "Europe/Moscow")
     public void resetDailyBets() {
         int prev = betsToday.getAndSet(0);
         log.info("Daily bet counter reset, previous: {}", prev);
@@ -142,6 +149,16 @@ public class SignalDetectionService {
                 from,
                 to
         );
+
+        // Новый фильтр по суммарному весу китов
+        Double totalWeight = null;
+        if (whaleWeightFilterEnabled) {
+            totalWeight = betRepository.getTotalWhaleWeight(marketId.trim(), outcome.trim(), from, to);
+            if (totalWeight == null || totalWeight < minWhaleWeight) {
+                log.info("Signal ignored: total whale weight {} < {}", totalWeight, minWhaleWeight);
+                return;
+            }
+        }
 
         if (stats == null) {
             log.info("processMarketOutcome: stats is null for marketId={}, outcome={}", marketId, outcome);
@@ -239,7 +256,8 @@ public class SignalDetectionService {
         double baseScore = stats.getTotalAmount().doubleValue()
                 * stats.getWhalesCount()
                 * Math.log10(volume + 1)
-                * Math.log10(liquidity + 1);
+                * Math.log10(liquidity + 1)
+                * Math.pow(stats.getWhaleWeight() + 1, 1.5);
 
         // Штраф за сильный перекос холдеров (опционально, но можно)
         double penalty = 1.0;
@@ -288,6 +306,7 @@ public class SignalDetectionService {
         signal.setFirstBetAt(stats.getFirstBetAt());
         signal.setLastBetAt(stats.getLastBetAt());
         signal.setReason(buildReason(stats));
+        signal.setWhaleWeight(totalWeight);
 
         Instant signalTime = Objects.requireNonNullElse(stats.getLastBetAt(), to);
         signal.setCreatedAt(signalTime);
@@ -489,13 +508,13 @@ public class SignalDetectionService {
 
     /**
      * Проверяет наличие сильных холдеров противоположного исхода.
-     *
+     * <p>
      * Фильтрация применяется только если:
      * - рынок бинарный (ровно 2 исхода);
      * - текущий outcome найден в списке outcomes;
      * - есть ровно 2 CLOB tokenIds;
      * - можно однозначно сопоставить current outcome -> opposite token.
-     *
+     * <p>
      * Во всех неоднозначных случаях возвращает {@code false}, чтобы не терять валидные сигналы.
      */
     private boolean isFilteredByOppositeHolders(String marketId, String outcome) {

@@ -85,4 +85,7 @@ public class Signal {
 
     @Column(name = "auto_bet_placed", nullable = false)
     private Boolean autoBetPlaced = false;
+
+    @Column(name = "whale_weight")
+    private Double whaleWeight;
 }

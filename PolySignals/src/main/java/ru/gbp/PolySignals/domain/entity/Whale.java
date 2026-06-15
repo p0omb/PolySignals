@@ -33,4 +33,10 @@ public class Whale {
 
     @Column(name = "ignored")
     private Boolean ignored = false;
+
+    @Column(name = "active", nullable = false)
+    private Boolean active = true;
+
+    @Column(name = "weight")
+    private Double weight = 0.5;
 }

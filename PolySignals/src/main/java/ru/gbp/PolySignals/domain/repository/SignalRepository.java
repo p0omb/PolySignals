@@ -92,5 +92,8 @@ public interface SignalRepository extends JpaRepository<Signal, Long> {
             WHERE s.signalKey = :signalKey
             """)
     Optional<Signal> findBySignalKey(@Param("signalKey") String signalKey);
+
+    @Query("SELECT COUNT(s) > 0 FROM Signal s WHERE s.marketId = :marketId AND UPPER(s.outcome) <> UPPER(:outcome) AND s.createdAt >= :since")
+    boolean existsOppositeSignal(@Param("marketId") String marketId, @Param("outcome") String outcome, @Param("since") Instant since);
 }
 

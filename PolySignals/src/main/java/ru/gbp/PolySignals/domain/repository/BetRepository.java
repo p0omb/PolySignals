@@ -94,4 +94,19 @@ public interface BetRepository extends JpaRepository<Bet, Long> {
             @Param("marketId") String marketId,
             @Param("outcome") String outcome
     );
+
+    @Query(value = """
+        SELECT COALESCE(SUM(w.weight), 0)
+        FROM bet b
+        JOIN whale w ON b.whale_id = w.id
+        WHERE b.market_id = :marketId
+          AND b.outcome = :outcome
+          AND b.transaction_time >= :from
+          AND b.transaction_time <= :to
+          AND w.active = true
+        """, nativeQuery = true)
+    Double getTotalWhaleWeight(@Param("marketId") String marketId,
+                               @Param("outcome") String outcome,
+                               @Param("from") Instant from,
+                               @Param("to") Instant to);
 }

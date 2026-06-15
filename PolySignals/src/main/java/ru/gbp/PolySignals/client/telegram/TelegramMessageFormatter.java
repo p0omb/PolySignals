@@ -25,11 +25,33 @@ public class TelegramMessageFormatter {
         String whales = formatWhales(payload.whaleLabels());
         String reason = payload.reason();
 
+        // Вес китов (может быть null, если не заполнен)
+        double weight = payload.whaleWeight() != null ? payload.whaleWeight() : 0.0;
+        StringBuilder prefix = new StringBuilder();
+        StringBuilder postfix = new StringBuilder();
+        if (weight >= 30.0) {
+            prefix.append("🚨🚨🚨 ");
+            postfix.append(" !!!");
+        } else if (weight >= 20.0) {
+            prefix.append("🔔 ");
+            postfix.append(" !!");
+        } else if (weight >= 10.0) {
+            prefix.append("⚡ ");
+            postfix.append(" !");
+        }
+
         StringBuilder message = new StringBuilder(256);
+        message.append(prefix);
         message.append("<b>🐋 Multi-whale signal</b>\n\n");
         message.append(lineText("Event", event));
         message.append(lineText("Outcome", outcome));
         message.append(lineText("Whales matched", String.valueOf(payload.whalesCount())));
+
+        // Выводим вес, если он задан
+        if (payload.whaleWeight() != null) {
+            message.append(lineText("Whale weight", String.format("%.2f", payload.whaleWeight())));
+        }
+
         message.append(lineText("Total amount", formatAmount(payload.totalAmount())));
         message.append(lineText("Window", formatInstant(payload.firstBetAt()) + " — " + formatInstant(payload.lastBetAt())));
         message.append(lineText("Whales", whales));
@@ -40,6 +62,7 @@ public class TelegramMessageFormatter {
         if (hasText(payload.marketUrl())) {
             message.append(lineHtml("Link", buildLink(payload.marketUrl())));
         }
+        message.append(postfix);
 
         return message.toString().trim();
     }

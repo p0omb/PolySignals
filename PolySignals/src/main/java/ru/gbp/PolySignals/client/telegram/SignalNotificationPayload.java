@@ -16,7 +16,8 @@ public record SignalNotificationPayload(
         Instant firstBetAt,
         Instant lastBetAt,
         List<String> whaleLabels,
-        String reason
+        String reason,
+        Double whaleWeight
 ) {
     public SignalNotificationPayload {
         Objects.requireNonNull(signalId, "signalId must not be null");

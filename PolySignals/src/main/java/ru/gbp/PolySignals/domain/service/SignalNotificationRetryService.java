@@ -107,7 +107,8 @@ public class SignalNotificationRetryService {
                 signal.getLastBetAt(),
                 // важно: реальные whaleLabels из сигнала
                 signal.getWhaleLabels(),
-                signal.getReason()
+                signal.getReason(),
+                signal.getWhaleWeight()
         );
 
         try {

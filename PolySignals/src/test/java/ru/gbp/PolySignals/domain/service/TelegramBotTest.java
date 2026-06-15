@@ -28,7 +28,8 @@ class TelegramBotTest {
                 Instant.parse("2026-01-01T10:00:00Z"),
                 Instant.parse("2026-01-01T11:00:00Z"),
                 List.of("whale-1", "whale-2"),
-                "reason <x>"
+                "reason <x>",
+                2.0
         );
 
         String message = formatter.formatSignal(payload);

@@ -16,5 +16,7 @@ public interface MarketOutcomeSignalProjection {
     Instant getFirstBetAt();
 
     Instant getLastBetAt();
+
+    Double getWhaleWeight();
 }
 
