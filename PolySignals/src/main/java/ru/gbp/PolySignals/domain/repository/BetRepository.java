@@ -41,12 +41,15 @@ public interface BetRepository extends JpaRepository<Bet, Long> {
                 COUNT(DISTINCT b.whale.id) as whalesCount,
                 SUM(b.amount) as totalAmount,
                 MIN(b.transactionTime) as firstBetAt,
-                MAX(b.transactionTime) as lastBetAt
+                MAX(b.transactionTime) as lastBetAt,
+                COALESCE(SUM(w.weight), 0.0) as whaleWeight
             FROM Bet b
+            JOIN b.whale w
             WHERE b.marketId = :marketId
               AND b.outcome = :outcome
               AND b.transactionTime >= :from
               AND b.transactionTime <= :to
+              AND w.active = true
             GROUP BY b.marketId, b.outcome
             """)
     MarketOutcomeSignalProjection findMarketOutcomeSignalStats(

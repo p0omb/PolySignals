@@ -48,8 +48,10 @@ class SignalDetectionIntegrationTest extends AbstractPostgresIntegrationTest {
                 .singleElement()
                 .satisfies(signal -> {
                     assertThat(signal.getMarketId()).isEqualTo("m1");
-                    assertThat(signal.getOutcome()).isEqualTo("yes");
+                    assertThat(signal.getOutcome()).isEqualTo("YES");  // нормализуется в верхний регистр
                     assertThat(signal.getSignalKey()).isNotBlank();
+                    // Проверяем, что whaleWeight это SUM(w1.weight + w2.weight)
+                    assertThat(signal.getWhaleWeight()).isEqualTo(1.0);  // 0.5 + 0.5 (default weights)
                 });
 
         verify(notificationService).sendSignalNotification(any());

@@ -150,19 +150,18 @@ public class SignalDetectionService {
                 to
         );
 
-        // Новый фильтр по суммарному весу китов
-        Double totalWeight = null;
-        if (whaleWeightFilterEnabled) {
-            totalWeight = betRepository.getTotalWhaleWeight(marketId.trim(), outcome.trim(), from, to);
-            if (totalWeight == null || totalWeight < minWhaleWeight) {
-                log.info("Signal ignored: total whale weight {} < {}", totalWeight, minWhaleWeight);
-                return;
-            }
-        }
-
         if (stats == null) {
             log.info("processMarketOutcome: stats is null for marketId={}, outcome={}", marketId, outcome);
             return;
+        }
+
+        // Фильтр по суммарному весу китов (вычисляется в запросе как SUM(w.weight))
+        if (whaleWeightFilterEnabled) {
+            Double totalWhaleWeight = stats.getWhaleWeight();
+            if (totalWhaleWeight == null || totalWhaleWeight < minWhaleWeight) {
+                log.info("Signal ignored: total whale weight {} < {}", totalWhaleWeight, minWhaleWeight);
+                return;
+            }
         }
 
         log.info("processMarketOutcome: stats marketId={} outcome={} whalesCount={} totalAmount={} firstBet={} lastBet={}",
@@ -306,7 +305,8 @@ public class SignalDetectionService {
         signal.setFirstBetAt(stats.getFirstBetAt());
         signal.setLastBetAt(stats.getLastBetAt());
         signal.setReason(buildReason(stats));
-        signal.setWhaleWeight(totalWeight);
+        // Используем суммарный вес из запроса (SUM всех весов китов в окне)
+        signal.setWhaleWeight(stats.getWhaleWeight());
 
         Instant signalTime = Objects.requireNonNullElse(stats.getLastBetAt(), to);
         signal.setCreatedAt(signalTime);
