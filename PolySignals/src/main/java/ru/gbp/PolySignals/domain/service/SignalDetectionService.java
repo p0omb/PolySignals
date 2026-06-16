@@ -150,19 +150,22 @@ public class SignalDetectionService {
                 to
         );
 
-        // Новый фильтр по суммарному весу китов
-        Double totalWeight = null;
-        if (whaleWeightFilterEnabled) {
-            totalWeight = betRepository.getTotalWhaleWeight(marketId.trim(), outcome.trim(), from, to);
-            if (totalWeight == null || totalWeight < minWhaleWeight) {
-                log.info("Signal ignored: total whale weight {} < {}", totalWeight, minWhaleWeight);
-                return;
-            }
-        }
-
         if (stats == null) {
             log.info("processMarketOutcome: stats is null for marketId={}, outcome={}", marketId, outcome);
             return;
+        }
+
+        // Вес считаем отдельно по уникальным китам в окне, чтобы один кит с несколькими ставками учитывался один раз
+        double totalWhaleWeight = Optional.ofNullable(
+                betRepository.getTotalWhaleWeight(marketId.trim(), outcome.trim(), from, to)
+        ).orElse(0.0);
+
+        // Фильтр по суммарному весу уникальных китов
+        if (whaleWeightFilterEnabled) {
+            if (totalWhaleWeight < minWhaleWeight) {
+                log.info("Signal ignored: total whale weight {} < {}", totalWhaleWeight, minWhaleWeight);
+                return;
+            }
         }
 
         log.info("processMarketOutcome: stats marketId={} outcome={} whalesCount={} totalAmount={} firstBet={} lastBet={}",
@@ -257,7 +260,7 @@ public class SignalDetectionService {
                 * stats.getWhalesCount()
                 * Math.log10(volume + 1)
                 * Math.log10(liquidity + 1)
-                * Math.pow(stats.getWhaleWeight() + 1, 1.5);
+                * Math.pow(totalWhaleWeight + 1, 1.5);
 
         // Штраф за сильный перекос холдеров (опционально, но можно)
         double penalty = 1.0;
@@ -306,7 +309,7 @@ public class SignalDetectionService {
         signal.setFirstBetAt(stats.getFirstBetAt());
         signal.setLastBetAt(stats.getLastBetAt());
         signal.setReason(buildReason(stats));
-        signal.setWhaleWeight(totalWeight);
+        signal.setWhaleWeight(totalWhaleWeight);
 
         Instant signalTime = Objects.requireNonNullElse(stats.getLastBetAt(), to);
         signal.setCreatedAt(signalTime);

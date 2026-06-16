@@ -41,12 +41,15 @@ public interface BetRepository extends JpaRepository<Bet, Long> {
                 COUNT(DISTINCT b.whale.id) as whalesCount,
                 SUM(b.amount) as totalAmount,
                 MIN(b.transactionTime) as firstBetAt,
-                MAX(b.transactionTime) as lastBetAt
+                MAX(b.transactionTime) as lastBetAt,
+                0.0 as whaleWeight
             FROM Bet b
+            JOIN b.whale w
             WHERE b.marketId = :marketId
               AND b.outcome = :outcome
               AND b.transactionTime >= :from
               AND b.transactionTime <= :to
+              AND w.active = true
             GROUP BY b.marketId, b.outcome
             """)
     MarketOutcomeSignalProjection findMarketOutcomeSignalStats(
@@ -97,13 +100,16 @@ public interface BetRepository extends JpaRepository<Bet, Long> {
 
     @Query(value = """
         SELECT COALESCE(SUM(w.weight), 0)
-        FROM bet b
-        JOIN whale w ON b.whale_id = w.id
-        WHERE b.market_id = :marketId
-          AND b.outcome = :outcome
-          AND b.transaction_time >= :from
-          AND b.transaction_time <= :to
-          AND w.active = true
+        FROM whale w
+        JOIN (
+            SELECT DISTINCT b.whale_id
+            FROM bet b
+            WHERE b.market_id = :marketId
+              AND b.outcome = :outcome
+              AND b.transaction_time >= :from
+              AND b.transaction_time <= :to
+        ) unique_whales ON unique_whales.whale_id = w.id
+        WHERE w.active = true
         """, nativeQuery = true)
     Double getTotalWhaleWeight(@Param("marketId") String marketId,
                                @Param("outcome") String outcome,

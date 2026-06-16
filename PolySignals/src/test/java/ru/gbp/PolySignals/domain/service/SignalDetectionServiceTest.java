@@ -83,9 +83,10 @@ class SignalDetectionServiceTest {
                         new BigDecimal("30"),
                         Instant.parse("2026-01-01T09:00:00Z"),
                         Instant.parse("2026-01-01T10:00:00Z"),
-                        2.0   // whaleWeight достаточный для прохождения MIN_WHALE_WEIGHT (1.5)
+                        2.0   // whaleWeight: SUM всех весов китов (0.7 + 1.3 = 2.0)
                 ));
 
+        // Сервис использует отдельный метод для суммы весов уникальных китов
         lenient().when(betRepository.getTotalWhaleWeight(anyString(), anyString(), any(), any()))
                 .thenReturn(2.0);
 
