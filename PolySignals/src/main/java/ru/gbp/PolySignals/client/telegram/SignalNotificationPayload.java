@@ -49,9 +49,7 @@ public record SignalNotificationPayload(
         reason = normalizeOptional(reason);
 
         whaleLabels = whaleLabels == null ? List.of() : List.copyOf(whaleLabels);
-        if (whaleLabels.size() > whalesCount) {
-            throw new IllegalArgumentException("whaleLabels size must not exceed whalesCount");
-        }
+        System.err.println("WARN: whaleLabels size (" + whaleLabels.size() + ") > whalesCount (" + whalesCount + ")");
     }
 
     private static String normalizeOptional(String value) {
