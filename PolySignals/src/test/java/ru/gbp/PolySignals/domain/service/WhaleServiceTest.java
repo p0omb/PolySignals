@@ -60,6 +60,51 @@ class WhaleServiceTest {
                 .containsExactly("whale-1", "whale-2");
     }
 
+    @Test
+    void addsManualWhaleWithDefaults() {
+        when(whaleRepository.findByUserId("0xmanual")).thenReturn(Optional.empty());
+        when(whaleRepository.save(any(Whale.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Whale whale = whaleService.addWhale("  0xmanual  ", "  Manual whale  ");
+
+        assertThat(whale.getUserId()).isEqualTo("0xmanual");
+        assertThat(whale.getUserName()).isEqualTo("Manual whale");
+        assertThat(whale.getVolume()).isZero();
+        assertThat(whale.getProfit()).isZero();
+        assertThat(whale.getLastSeenAt()).isNotNull();
+        assertThat(whale.getIgnored()).isFalse();
+        assertThat(whale.getActive()).isTrue();
+        assertThat(whale.getWeight()).isEqualTo(0.5);
+    }
+
+    @Test
+    void rejectsDuplicateManualWhale() {
+        when(whaleRepository.findByUserId("0xexisting")).thenReturn(Optional.of(existingWhale()));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> whaleService.addWhale("0xexisting", null))
+                .isInstanceOf(IllegalStateException.class);
+        verify(whaleRepository, never()).save(any());
+    }
+
+    @Test
+    void removesManualWhale() {
+        Whale whale = existingWhale();
+        when(whaleRepository.findByUserId("u1")).thenReturn(Optional.of(whale));
+
+        assertThat(whaleService.removeWhale(" u1 ")).isTrue();
+
+        verify(whaleRepository).delete(whale);
+    }
+
+    @Test
+    void returnsAllWhales() {
+        List<Whale> whales = List.of(existingWhale());
+        when(whaleRepository.findAll()).thenReturn(whales);
+
+        assertThat(whaleService.getAllWhales()).isSameAs(whales);
+    }
+
     private Whale existingWhale() {
         Whale whale = new Whale();
         whale.setUserId("u1");

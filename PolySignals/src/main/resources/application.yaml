@@ -57,6 +57,9 @@ polymarket:
     base-url: ${POLYMARKET_GAMMA_API_BASE_URL:https://gamma-api.polymarket.com}
 
 app:
+  scheduling:
+    whale-update:
+      enabled: false
   whales:
     top-limit: ${WHALES_TOP_LIMIT:100}
   signal:

@@ -2,6 +2,7 @@ package ru.gbp.PolySignals.monitoring;
 
 import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -15,6 +16,9 @@ public class SchedulerHealthIndicator implements HealthIndicator {
 
     private final AtomicReference<Instant> lastRunAt = new AtomicReference<>();
 
+    @Value("${app.scheduling.whale-update.enabled:false}")
+    private boolean whaleUpdateEnabled;
+
     public void updateLastRun() {
         lastRunAt.set(Instant.now());
     }
@@ -23,6 +27,12 @@ public class SchedulerHealthIndicator implements HealthIndicator {
     public Health health() {
         Instant lastRun = lastRunAt.get();
         if (lastRun == null) {
+            if (!whaleUpdateEnabled) {
+                return Health.up()
+                        .withDetail("whaleUpdateScheduler", "disabled")
+                        .withDetail("lastRunAt", "never")
+                        .build();
+            }
             return Health.down()
                     .withDetail("lastRunAt", "never")
                     .withDetail("maxAge", MAX_AGE.toString())
@@ -45,4 +55,3 @@ public class SchedulerHealthIndicator implements HealthIndicator {
                 .build();
     }
 }
-

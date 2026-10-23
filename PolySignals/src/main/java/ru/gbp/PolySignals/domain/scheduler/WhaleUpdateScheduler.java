@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import ru.gbp.PolySignals.client.polymarket.DataApiClient;
 import ru.gbp.PolySignals.client.polymarket.PolymarketApiErrorHandler.PolymarketApiException;
@@ -16,6 +17,7 @@ import java.util.List;
 
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "app.scheduling.whale-update.enabled", havingValue = "true", matchIfMissing = false)
 @RequiredArgsConstructor
 public class WhaleUpdateScheduler {
 

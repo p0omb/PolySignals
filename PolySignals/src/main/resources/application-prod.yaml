@@ -12,6 +12,11 @@ spring:
   jpa:
     show-sql: false
 
+app:
+  scheduling:
+    whale-update:
+      enabled: false
+
   cache:
     type: caffeine
 

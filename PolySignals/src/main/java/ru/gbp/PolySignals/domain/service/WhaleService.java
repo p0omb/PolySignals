@@ -67,4 +67,54 @@ public class WhaleService {
         List<LeaderboardUserDto> leaderboard = dataApiClient.getTopWhales(limit);
         updateWhales(leaderboard);
     }
+
+    @Transactional
+    public Whale addWhale(String address, String name) {
+        String normalizedAddress = normalizeAddress(address);
+        if (whaleRepository.findByUserId(normalizedAddress).isPresent()) {
+            throw new IllegalStateException("Whale already exists: " + normalizedAddress);
+        }
+
+        Whale whale = new Whale();
+        whale.setUserId(normalizedAddress);
+        whale.setUserName(normalizeName(name));
+        whale.setVolume(java.math.BigDecimal.ZERO);
+        whale.setProfit(java.math.BigDecimal.ZERO);
+        whale.setLastSeenAt(Instant.now());
+        whale.setIgnored(false);
+        whale.setActive(true);
+        whale.setWeight(0.5);
+        return whaleRepository.save(whale);
+    }
+
+    @Transactional
+    public boolean removeWhale(String address) {
+        String normalizedAddress = normalizeAddress(address);
+        return whaleRepository.findByUserId(normalizedAddress)
+                .map(whale -> {
+                    whaleRepository.delete(whale);
+                    return true;
+                })
+                .orElse(false);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Whale> getAllWhales() {
+        return whaleRepository.findAll();
+    }
+
+    private String normalizeAddress(String address) {
+        if (address == null || address.isBlank()) {
+            throw new IllegalArgumentException("Whale address must not be blank");
+        }
+        return address.trim();
+    }
+
+    private String normalizeName(String name) {
+        if (name == null) {
+            return null;
+        }
+        String normalized = name.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
 }

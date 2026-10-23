@@ -7,6 +7,11 @@ spring:
       minimum-idle: 1
       connection-timeout: 30000
 
+app:
+  scheduling:
+    whale-update:
+      enabled: false
+
 management:
   endpoints:
     web:

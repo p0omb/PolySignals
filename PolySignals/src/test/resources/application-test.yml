@@ -53,6 +53,9 @@ spring:
 
 # APPLICATION CONFIGURATION (MUST MATCH PRODUCTION DEFAULTS)
 app:
+  scheduling:
+    whale-update:
+      enabled: false
   whales:
     top-limit: 100
   signal:

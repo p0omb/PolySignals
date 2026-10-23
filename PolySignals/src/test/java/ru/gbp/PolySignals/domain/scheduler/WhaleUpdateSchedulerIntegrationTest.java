@@ -34,6 +34,7 @@ class WhaleUpdateSchedulerIntegrationTest extends AbstractPostgresIntegrationTes
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry registry) {
         registry.add("polymarket.data-api.base-url", wiremock::baseUrl);
+        registry.add("app.scheduling.whale-update.enabled", () -> true);
     }
 
     @AfterAll
